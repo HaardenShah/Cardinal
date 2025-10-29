@@ -1,10 +1,13 @@
 <?php
 /**
- * API Router
- * Routes all /api/* requests
+ * API Router - Standalone
+ * Direct access to /api/index.php
  */
 
 require_once __DIR__ . '/../app/bootstrap.php';
+
+// Debug logging
+error_log("API Request: " . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI']);
 
 setSecurityHeaders();
 header('Content-Type: application/json');
@@ -16,8 +19,15 @@ $requestMethod = $_SERVER['REQUEST_METHOD'];
 // Remove query string
 $path = parse_url($requestUri, PHP_URL_PATH);
 
-// Remove /api prefix
-$path = preg_replace('~^/api~', '', $path);
+// Remove /api and /api/index.php prefix
+$path = preg_replace('~^/api(/index\.php)?~', '', $path);
+
+// If path is empty, it means we hit /api/ or /api/index.php directly
+if (empty($path)) {
+    $path = '/';
+}
+
+error_log("Parsed API path: " . $path);
 
 // Route handlers
 $routes = [
@@ -58,13 +68,15 @@ if (isset($routes[$requestMethod])) {
         if (preg_match('~^' . $pattern . '$~', $path, $matches)) {
             $handler = $func;
             array_shift($matches); // Remove full match
+            error_log("Matched handler: " . $func);
             break;
         }
     }
 }
 
 if (!$handler) {
-    jsonResponse(['error' => 'Not found'], 404);
+    error_log("No handler found for: " . $requestMethod . " " . $path);
+    jsonResponse(['error' => 'Not found', 'path' => $path, 'method' => $requestMethod], 404);
     exit;
 }
 
@@ -72,7 +84,7 @@ if (!$handler) {
 try {
     call_user_func($handler, ...$matches);
 } catch (Exception $e) {
-    error_log($e->getMessage());
+    error_log("Handler error: " . $e->getMessage());
     jsonResponse(['error' => 'Internal server error'], 500);
 }
 
@@ -146,9 +158,12 @@ function handleHealth(): void {
 // ============================================================================
 
 function handleLogin(): void {
+    error_log("handleLogin called");
     startSecureSession();
     
     $input = json_decode(file_get_contents('php://input'), true);
+    error_log("Login input: " . json_encode($input));
+    
     $email = $input['email'] ?? '';
     $password = $input['password'] ?? '';
     
@@ -171,7 +186,8 @@ function handleLogin(): void {
     $user = $stmt->fetch();
     
     if (!$user || !password_verify($password, $user['password_hash'])) {
-        sleep(1); // Prevent timing attacks
+        sleep(1);
+        error_log("Login failed for: " . $email);
         jsonResponse(['error' => 'Invalid credentials'], 401);
         return;
     }
@@ -192,6 +208,8 @@ function handleLogin(): void {
     $stmt->execute([':id' => $user['id']]);
     
     logActivity('login', 'user', $user['id']);
+    
+    error_log("Login successful for: " . $email);
     
     jsonResponse([
         'success' => true,
@@ -382,7 +400,7 @@ function handleUpdateTile(string $id): void {
     
     $fields[] = "updated_at = datetime('now')";
     
-    if (count($fields) === 1) { // Only updated_at
+    if (count($fields) === 1) {
         jsonResponse(['error' => 'No fields to update'], 400);
         return;
     }
@@ -438,7 +456,6 @@ function handleReorderTiles(): void {
     $stmt = $db->prepare("UPDATE tiles SET order_index = :order WHERE id = :id");
     
     foreach ($ids as $order => $id) {
-        // Validate that ID is numeric
         if (!is_numeric($id)) {
             continue;
         }
@@ -736,7 +753,7 @@ function processImage(string $tmpPath, string $originalName): array {
         throw new Exception('Image dimensions too large (max 10000x10000)');
     }
     
-    if ($width * $height > 25000000) { // 25 megapixels
+    if ($width * $height > 25000000) {
         imagedestroy($img);
         throw new Exception('Image resolution too high (max 25 megapixels)');
     }

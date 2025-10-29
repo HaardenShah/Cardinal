@@ -97,6 +97,7 @@ if (isAuthenticated()) {
         button:disabled {
             opacity: 0.6;
             cursor: not-allowed;
+            transform: none;
         }
         
         .error {
@@ -149,24 +150,45 @@ if (isAuthenticated()) {
             };
             
             try {
+                console.log('Attempting login to:', '/api/auth/login');
+                
                 const response = await fetch('/api/auth/login', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify(formData),
+                    credentials: 'same-origin'
                 });
                 
-                const data = await response.json();
+                console.log('Response status:', response.status);
+                console.log('Response headers:', [...response.headers.entries()]);
+                
+                let data;
+                const contentType = response.headers.get('content-type');
+                
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    const text = await response.text();
+                    console.error('Non-JSON response:', text);
+                    throw new Error('Server returned non-JSON response: ' + text.substring(0, 100));
+                }
                 
                 if (response.ok) {
+                    console.log('Login successful, redirecting...');
                     window.location.href = '/admin/tiles';
                 } else {
+                    console.error('Login failed:', data);
                     errorDiv.textContent = data.error || 'Login failed';
                     errorDiv.style.display = 'block';
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Sign In';
                 }
             } catch (error) {
-                errorDiv.textContent = 'Network error. Please try again.';
+                console.error('Login error:', error);
+                errorDiv.textContent = 'Network error: ' + error.message;
                 errorDiv.style.display = 'block';
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Sign In';

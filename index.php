@@ -4,6 +4,9 @@
  * This file routes all requests to the appropriate handlers
  */
 
+// Error logging for debugging
+error_log("Request: " . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI']);
+
 // Check if setup is needed
 $configFile = __DIR__ . '/config/config.php';
 $needsSetup = !file_exists($configFile) || filesize($configFile) < 500;
@@ -25,14 +28,16 @@ if ($requestUri === 'setup.php' || strpos($requestUri, 'setup.php') === 0) {
 }
 
 // Route API requests (check BEFORE admin to avoid path conflicts)
-if (strpos($requestUri, 'api/') === 0) {
+if (strpos($requestUri, 'api/') === 0 || $requestUri === 'api') {
+    error_log("Routing to API handler");
     require __DIR__ . '/api/index.php';
     exit;
 }
 
 // Route admin requests
-if (strpos($requestUri, 'admin/') === 0) {
+if (strpos($requestUri, 'admin/') === 0 || strpos($requestUri, 'admin') === 0) {
     $adminFile = str_replace('admin/', '', $requestUri);
+    $adminFile = str_replace('admin', '', $adminFile);
     
     // Handle admin assets
     if (strpos($adminFile, 'assets/') === 0) {
