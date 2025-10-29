@@ -1,7 +1,7 @@
 <?php
 /**
- * Portfolio Hub - Setup Wizard
- * Upload and visit this file to get started!
+ * Portfolio Hub V2 - Setup Wizard
+ * Just upload and visit to get started!
  */
 
 session_start();
@@ -11,7 +11,7 @@ $configFile = __DIR__ . '/config/config.php';
 $isInstalled = file_exists($configFile) && filesize($configFile) > 500;
 
 if ($isInstalled && !isset($_GET['reinstall'])) {
-    header('Location: /admin/login');
+    header('Location: /');
     exit;
 }
 
@@ -45,9 +45,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['step'])) {
             if ($result) {
                 $_SESSION['setup_complete'] = true;
                 unset($_SESSION['setup']);
-                echo json_encode(['success' => true, 'redirect' => '/admin/login']);
+                echo json_encode(['success' => true, 'redirect' => '/admin/login.php']);
             } else {
-                echo json_encode(['success' => false, 'error' => 'Setup failed']);
+                echo json_encode(['success' => false, 'error' => 'Setup failed. Check data/setup-error.log']);
             }
             exit;
     }
@@ -76,6 +76,9 @@ function completeSetup($data) {
         }
     }
     
+    // Determine if HTTPS
+    $sessionSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'true' : 'false';
+    
     // Create config file
     $config = <<<PHP
 <?php
@@ -91,7 +94,7 @@ return [
     
     'DB_PATH' => __DIR__ . '/../data/site.db',
     
-    'SESSION_SECURE' => true,
+    'SESSION_SECURE' => $sessionSecure,
     'SESSION_NAME' => 'portfolio_session',
     'CSRF_TOKEN_NAME' => 'csrf_token',
     
@@ -128,14 +131,75 @@ PHP;
         $db = getDatabase();
         
         // Create tables
-        $schemaFile = __DIR__ . '/app/schema.sql';
-        if (!file_exists($schemaFile)) {
-            error_log("Schema file not found: $schemaFile");
-            return false;
-        }
+        $db->exec("
+        CREATE TABLE IF NOT EXISTS tiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slug TEXT UNIQUE NOT NULL,
+            title TEXT NOT NULL,
+            blurb TEXT,
+            cta_label TEXT DEFAULT 'Visit',
+            target_url TEXT NOT NULL,
+            bg_media_id INTEGER,
+            accent_hex TEXT,
+            order_index INTEGER DEFAULT 0,
+            visible INTEGER DEFAULT 1,
+            publish_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (bg_media_id) REFERENCES media(id) ON DELETE SET NULL
+        )");
         
-        $schema = file_get_contents($schemaFile);
-        $db->exec($schema);
+        $db->exec("
+        CREATE TABLE IF NOT EXISTS media (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            original_name TEXT NOT NULL,
+            path_original TEXT NOT NULL,
+            path_webp TEXT NOT NULL,
+            width INTEGER,
+            height INTEGER,
+            sizes_json TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+        
+        $db->exec("
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT CHECK(role IN ('admin', 'editor')) DEFAULT 'admin',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_login_at DATETIME
+        )");
+        
+        $db->exec("
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )");
+        
+        $db->exec("
+        CREATE TABLE IF NOT EXISTS activity_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            action TEXT NOT NULL,
+            entity_type TEXT,
+            entity_id INTEGER,
+            details TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        )");
+        
+        $db->exec("
+        CREATE TABLE IF NOT EXISTS rate_limits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+        
+        // Create indexes
+        $db->exec("CREATE INDEX IF NOT EXISTS idx_tiles_visible ON tiles(visible, publish_at)");
+        $db->exec("CREATE INDEX IF NOT EXISTS idx_tiles_order ON tiles(order_index)");
+        $db->exec("CREATE INDEX IF NOT EXISTS idx_rate_limits_key ON rate_limits(key, created_at)");
         
         // Create admin user
         $passwordHash = password_hash($data['admin_password'], PASSWORD_ARGON2ID);
@@ -163,6 +227,8 @@ PHP;
         
         return true;
     } catch (Exception $e) {
+        $errorMsg = date('Y-m-d H:i:s') . " - " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n\n";
+        @file_put_contents(__DIR__ . '/data/setup-error.log', $errorMsg, FILE_APPEND);
         error_log("Database setup failed: " . $e->getMessage());
         return false;
     }
@@ -316,9 +382,14 @@ $detectedUrl = "$protocol://$host";
             color: white;
         }
         
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
         
         .btn-secondary {
@@ -350,10 +421,13 @@ $detectedUrl = "$protocol://$host";
             100% { transform: rotate(360deg); }
         }
         
-        .success-icon {
-            font-size: 60px;
-            color: #10b981;
-            margin-bottom: 20px;
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 16px;
+            font-size: 14px;
         }
         
         @media (max-width: 600px) {
@@ -450,6 +524,7 @@ $detectedUrl = "$protocol://$host";
                     <div class="spinner"></div>
                     <h2>Setting up your portfolio...</h2>
                     <p style="color: #666; margin-top: 12px;">This will only take a moment</p>
+                    <div id="errorContainer"></div>
                 </div>
             </div>
             
@@ -500,7 +575,6 @@ $detectedUrl = "$protocol://$host";
                 }
             });
             
-            // Special validation for step 2 (password match)
             if (step === 2) {
                 const pass = document.getElementById('admin_password').value;
                 const confirm = document.getElementById('admin_password_confirm').value;
@@ -544,7 +618,7 @@ $detectedUrl = "$protocol://$host";
                 return data;
             } catch (error) {
                 console.error('Save failed:', error);
-                return { success: false };
+                return { success: false, error: error.message };
             }
         }
         
@@ -553,39 +627,30 @@ $detectedUrl = "$protocol://$host";
                 return;
             }
             
-            // Disable button during processing
             const nextBtn = document.getElementById('nextBtn');
             nextBtn.disabled = true;
-            nextBtn.style.opacity = '0.6';
             
-            // Save current step
             const result = await saveStep(currentStep);
             
             if (!result.success) {
                 alert('Failed to save. Please try again.');
                 nextBtn.disabled = false;
-                nextBtn.style.opacity = '1';
                 return;
             }
             
-            // Move to next step
             if (currentStep < 3) {
                 currentStep++;
                 showStep(currentStep);
                 nextBtn.disabled = false;
-                nextBtn.style.opacity = '1';
             } else if (currentStep === 3) {
-                // Trigger step 4 (installation)
                 currentStep = 4;
                 showStep(currentStep);
                 
-                // Actually run the installation
                 const installResult = await saveStep(4);
                 
                 if (installResult.success && installResult.redirect) {
-                    // Show success briefly
                     document.querySelector('[data-step="4"] .installing').innerHTML = `
-                        <div class="success-icon">✓</div>
+                        <div style="font-size: 60px; margin-bottom: 20px;">✅</div>
                         <h2>Setup Complete!</h2>
                         <p style="color: #666; margin-top: 12px;">Redirecting to login...</p>
                     `;
@@ -594,11 +659,16 @@ $detectedUrl = "$protocol://$host";
                         window.location.href = installResult.redirect;
                     }, 1500);
                 } else {
-                    alert('Setup failed. Please check server logs and try again.');
-                    currentStep = 3;
-                    showStep(currentStep);
-                    nextBtn.disabled = false;
-                    nextBtn.style.opacity = '1';
+                    const errorMsg = installResult.error || 'Setup failed. Check server logs.';
+                    document.getElementById('errorContainer').innerHTML = `
+                        <div class="error-message">${errorMsg}</div>
+                    `;
+                    
+                    setTimeout(() => {
+                        currentStep = 3;
+                        showStep(currentStep);
+                        nextBtn.disabled = false;
+                    }, 3000);
                 }
             }
         });
@@ -610,7 +680,6 @@ $detectedUrl = "$protocol://$host";
             }
         });
         
-        // Initial setup
         updateProgress();
     </script>
 </body>

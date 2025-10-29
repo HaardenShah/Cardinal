@@ -1,14 +1,14 @@
 <?php
 /**
- * Portfolio Hub V2 - Main Entry Point
- * Routes all requests and handles setup redirect
+ * Portfolio Hub V2 - Main Router
+ * This file routes all requests to the appropriate handlers
  */
 
 // Check if setup is needed
 $configFile = __DIR__ . '/config/config.php';
 $needsSetup = !file_exists($configFile) || filesize($configFile) < 500;
 
-if ($needsSetup && !strpos($_SERVER['REQUEST_URI'], '/setup.php')) {
+if ($needsSetup && basename($_SERVER['PHP_SELF']) !== 'setup.php') {
     header('Location: /setup.php');
     exit;
 }
@@ -19,12 +19,12 @@ $requestUri = strtok($requestUri, '?');
 $requestUri = ltrim($requestUri, '/');
 
 // Route setup page
-if (strpos($requestUri, 'setup.php') === 0 || $requestUri === 'setup.php') {
+if ($requestUri === 'setup.php' || strpos($requestUri, 'setup.php') === 0) {
     require __DIR__ . '/setup.php';
     exit;
 }
 
-// Route API requests
+// Route API requests (check BEFORE admin to avoid path conflicts)
 if (strpos($requestUri, 'api/') === 0) {
     require __DIR__ . '/api/index.php';
     exit;
@@ -51,6 +51,7 @@ if (strpos($requestUri, 'admin/') === 0) {
         $adminFile = 'tiles.php';
     }
     
+    // Add .php extension if not present
     if (!preg_match('/\.php$/', $adminFile)) {
         $adminFile .= '.php';
     }
@@ -61,14 +62,22 @@ if (strpos($requestUri, 'admin/') === 0) {
         require $adminPath;
         exit;
     }
+    
+    // 404 if admin file not found
+    http_response_code(404);
+    echo '<!DOCTYPE html><html><head><title>404</title></head><body><h1>404 - Admin Page Not Found</h1></body></html>';
+    exit;
 }
 
-// Serve static files from public directory
+// Serve static files from public directory if they exist
 if (!empty($requestUri)) {
     $publicPath = __DIR__ . '/public/' . $requestUri;
     
     if (file_exists($publicPath) && is_file($publicPath)) {
+        // Determine MIME type
         $mimeType = mime_content_type($publicPath);
+        
+        // Set cache headers for static assets
         $extension = pathinfo($publicPath, PATHINFO_EXTENSION);
         $cacheable = in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'css', 'js', 'woff', 'woff2', 'ico']);
         
@@ -83,5 +92,5 @@ if (!empty($requestUri)) {
     }
 }
 
-// Default to public index.php
+// Default to public index.php (home page)
 require __DIR__ . '/public/index.php';
