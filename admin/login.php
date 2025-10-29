@@ -150,9 +150,11 @@ if (isAuthenticated()) {
             };
             
             try {
-                console.log('Attempting login to:', '/api/auth/login');
+                // Use direct path to API file
+                const apiUrl = '/api/index.php/auth/login';
+                console.log('Attempting login to:', apiUrl);
                 
-                const response = await fetch('/api/auth/login', {
+                const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -163,7 +165,6 @@ if (isAuthenticated()) {
                 });
                 
                 console.log('Response status:', response.status);
-                console.log('Response headers:', [...response.headers.entries()]);
                 
                 let data;
                 const contentType = response.headers.get('content-type');
@@ -173,12 +174,12 @@ if (isAuthenticated()) {
                 } else {
                     const text = await response.text();
                     console.error('Non-JSON response:', text);
-                    throw new Error('Server returned non-JSON response: ' + text.substring(0, 100));
+                    throw new Error('Server returned non-JSON response. Check server configuration.');
                 }
                 
                 if (response.ok) {
                     console.log('Login successful, redirecting...');
-                    window.location.href = '/admin/tiles';
+                    window.location.href = '/admin/tiles.php';
                 } else {
                     console.error('Login failed:', data);
                     errorDiv.textContent = data.error || 'Login failed';

@@ -134,97 +134,102 @@ $csrfToken = generateCSRFToken();
     </div>
     
     <script>
-        const CSRF_TOKEN = '<?= $csrfToken ?>';
-        let settings = {};
+    const CSRF_TOKEN = '<?= $csrfToken ?>';
+    let settings = {};
+    
+    // API URL helper
+    function apiUrl(path) {
+        return '/api/index.php' + path;
+    }
+    
+    // Load settings
+    async function loadSettings() {
+        const response = await fetch(apiUrl('/settings'));
+        const data = await response.json();
+        settings = data.settings || {};
+        populateForm();
+    }
+    
+    function populateForm() {
+        document.getElementById('site_title').value = settings.site_title || '';
+        document.getElementById('site_description').value = settings.site_description || '';
+        document.getElementById('hero_text').value = settings.hero_text || '';
+        document.getElementById('hero_subtext').value = settings.hero_subtext || '';
+        document.getElementById('brand_primary').value = settings.brand_primary || '#6366f1';
+        document.getElementById('brand_secondary').value = settings.brand_secondary || '#8b5cf6';
+        document.getElementById('autoplay_enabled').checked = settings.autoplay_enabled === '1';
+        document.getElementById('autoplay_interval').value = settings.autoplay_interval || '7';
+        document.getElementById('open_links_new_tab').checked = settings.open_links_new_tab === '1';
+        document.getElementById('animation_speed').value = settings.animation_speed || 'normal';
+        document.getElementById('analytics_id').value = settings.analytics_id || '';
+    }
+    
+    async function saveSettings() {
+        const updatedSettings = {
+            site_title: document.getElementById('site_title').value,
+            site_description: document.getElementById('site_description').value,
+            hero_text: document.getElementById('hero_text').value,
+            hero_subtext: document.getElementById('hero_subtext').value,
+            brand_primary: document.getElementById('brand_primary').value,
+            brand_secondary: document.getElementById('brand_secondary').value,
+            autoplay_enabled: document.getElementById('autoplay_enabled').checked ? '1' : '0',
+            autoplay_interval: document.getElementById('autoplay_interval').value,
+            open_links_new_tab: document.getElementById('open_links_new_tab').checked ? '1' : '0',
+            animation_speed: document.getElementById('animation_speed').value,
+            analytics_id: document.getElementById('analytics_id').value,
+        };
         
-        // Load settings
-        async function loadSettings() {
-            const response = await fetch('/api/settings');
-            const data = await response.json();
-            settings = data.settings || {};
-            populateForm();
+        const response = await fetch(apiUrl('/settings'), {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                csrf_token: CSRF_TOKEN,
+                settings: updatedSettings
+            }),
+        });
+        
+        if (response.ok) {
+            const msg = document.getElementById('successMessage');
+            msg.style.display = 'block';
+            setTimeout(() => msg.style.display = 'none', 3000);
+        } else {
+            alert('Failed to save settings');
         }
+    }
+    
+    async function exportData() {
+        const tilesResponse = await fetch(apiUrl('/tiles'));
+        const tilesData = await tilesResponse.json();
         
-        function populateForm() {
-            document.getElementById('site_title').value = settings.site_title || '';
-            document.getElementById('site_description').value = settings.site_description || '';
-            document.getElementById('hero_text').value = settings.hero_text || '';
-            document.getElementById('hero_subtext').value = settings.hero_subtext || '';
-            document.getElementById('brand_primary').value = settings.brand_primary || '#6366f1';
-            document.getElementById('brand_secondary').value = settings.brand_secondary || '#8b5cf6';
-            document.getElementById('autoplay_enabled').checked = settings.autoplay_enabled === '1';
-            document.getElementById('autoplay_interval').value = settings.autoplay_interval || '7';
-            document.getElementById('open_links_new_tab').checked = settings.open_links_new_tab === '1';
-            document.getElementById('animation_speed').value = settings.animation_speed || 'normal';
-            document.getElementById('analytics_id').value = settings.analytics_id || '';
-        }
+        const settingsResponse = await fetch(apiUrl('/settings'));
+        const settingsData = await settingsResponse.json();
         
-        async function saveSettings() {
-            const updatedSettings = {
-                site_title: document.getElementById('site_title').value,
-                site_description: document.getElementById('site_description').value,
-                hero_text: document.getElementById('hero_text').value,
-                hero_subtext: document.getElementById('hero_subtext').value,
-                brand_primary: document.getElementById('brand_primary').value,
-                brand_secondary: document.getElementById('brand_secondary').value,
-                autoplay_enabled: document.getElementById('autoplay_enabled').checked ? '1' : '0',
-                autoplay_interval: document.getElementById('autoplay_interval').value,
-                open_links_new_tab: document.getElementById('open_links_new_tab').checked ? '1' : '0',
-                animation_speed: document.getElementById('animation_speed').value,
-                analytics_id: document.getElementById('analytics_id').value,
-            };
-            
-            const response = await fetch('/api/settings', {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    csrf_token: CSRF_TOKEN,
-                    settings: updatedSettings
-                }),
-            });
-            
-            if (response.ok) {
-                const msg = document.getElementById('successMessage');
-                msg.style.display = 'block';
-                setTimeout(() => msg.style.display = 'none', 3000);
-            } else {
-                alert('Failed to save settings');
-            }
-        }
+        const exportData = {
+            tiles: tilesData.tiles,
+            settings: settingsData.settings,
+            exported_at: new Date().toISOString(),
+        };
         
-        async function exportData() {
-            const tilesResponse = await fetch('/api/tiles');
-            const tilesData = await tilesResponse.json();
-            
-            const settingsResponse = await fetch('/api/settings');
-            const settingsData = await settingsResponse.json();
-            
-            const exportData = {
-                tiles: tilesData.tiles,
-                settings: settingsData.settings,
-                exported_at: new Date().toISOString(),
-            };
-            
-            const blob = new Blob([JSON.stringify(exportData, null, 2)], {type: 'application/json'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `portfolio-export-${Date.now()}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-        
-        async function runBackup() {
-            alert('Backup initiated. This runs on the server.');
-        }
-        
-        async function logout() {
-            await fetch('/api/auth/logout', {method: 'POST'});
-            window.location.href = '/admin/login';
-        }
-        
-        // Initialize
-        loadSettings();
-    </script>
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `portfolio-export-${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+    
+    async function runBackup() {
+        alert('Backup initiated. This runs on the server.');
+    }
+    
+    async function logout() {
+        await fetch(apiUrl('/auth/logout'), {method: 'POST'});
+        window.location.href = '/admin/login.php';
+    }
+    
+    // Initialize
+    loadSettings();
+</script>
 </body>
 </html>
