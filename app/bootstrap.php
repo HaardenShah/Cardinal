@@ -18,11 +18,38 @@ if (getenv('APP_ENV') === 'development') {
 function getConfig(): array {
     static $config = null;
     if ($config === null) {
-        $envPath = __DIR__ . '/../.env.php';
-        if (!file_exists($envPath)) {
-            die("Configuration file missing. Copy .env.php from .env.example.php");
+        // Check if config exists (post-setup)
+        $configPath = __DIR__ . '/../config/config.php';
+        
+        if (file_exists($configPath)) {
+            // Load actual config
+            $config = require $configPath;
+        } else {
+            // Return defaults for setup wizard
+            $config = [
+                'APP_ENV' => 'production',
+                'APP_URL' => 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost'),
+                'APP_NAME' => 'Portfolio Hub',
+                'DB_PATH' => __DIR__ . '/../data/site.db',
+                'SESSION_SECURE' => false,
+                'SESSION_NAME' => 'hub_session',
+                'CSRF_TOKEN_NAME' => 'csrf_token',
+                'CSP_REPORT_ONLY' => false,
+                'CSP_REPORT_URI' => null,
+                'UPLOAD_MAX_MB' => 10,
+                'UPLOAD_PATH' => __DIR__ . '/../uploads',
+                'UPLOAD_ALLOWED_TYPES' => ['image/jpeg', 'image/png', 'image/webp'],
+                'IMAGE_QUALITY' => 75,
+                'IMAGE_SIZES' => [480, 768, 1080, 1440, 1920],
+                'IMAGE_ASPECT_RATIO' => 0.75,
+                'RATE_LIMIT_LOGIN' => 5,
+                'RATE_LIMIT_MEDIA' => 20,
+                'BACKUP_PATH' => __DIR__ . '/../backups',
+                'BACKUP_KEEP_DAYS' => 14,
+                'ANALYTICS_ID' => '',
+                'RESPECT_DNT' => true,
+            ];
         }
-        $config = require $envPath;
     }
     return $config;
 }
