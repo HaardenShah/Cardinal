@@ -60,3 +60,5 @@ CREATE TABLE IF NOT EXISTS rate_limits (
 CREATE INDEX IF NOT EXISTS idx_tiles_visible ON tiles(visible, publish_at);
 CREATE INDEX IF NOT EXISTS idx_tiles_order ON tiles(order_index);
 CREATE INDEX IF NOT EXISTS idx_rate_limits_key ON rate_limits(key, created_at);
+CREATE INDEX IF NOT EXISTS idx_activity_log_user ON activity_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at);

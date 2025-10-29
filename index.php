@@ -71,14 +71,20 @@ if (strpos($requestUri, 'admin/') === 0) {
 
 // Serve static files from public directory if they exist
 if (!empty($requestUri)) {
+    // Sanitize the request URI to prevent path traversal
+    $requestUri = basename($requestUri);
     $publicPath = __DIR__ . '/public/' . $requestUri;
     
-    if (file_exists($publicPath) && is_file($publicPath)) {
+    // Verify the real path is within public directory
+    $realPath = realpath($publicPath);
+    $publicDir = realpath(__DIR__ . '/public/');
+    
+    if ($realPath && $publicDir && strpos($realPath, $publicDir) === 0 && is_file($realPath)) {
         // Determine MIME type
-        $mimeType = mime_content_type($publicPath);
+        $mimeType = mime_content_type($realPath);
         
         // Set cache headers for static assets
-        $extension = pathinfo($publicPath, PATHINFO_EXTENSION);
+        $extension = pathinfo($realPath, PATHINFO_EXTENSION);
         $cacheable = in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'css', 'js', 'woff', 'woff2', 'ico']);
         
         header('Content-Type: ' . $mimeType);
@@ -87,7 +93,7 @@ if (!empty($requestUri)) {
             header('Cache-Control: public, max-age=31536000, immutable');
         }
         
-        readfile($publicPath);
+        readfile($realPath);
         exit;
     }
 }

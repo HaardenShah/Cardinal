@@ -74,6 +74,8 @@ function getDatabase(): PDO {
         // Enable foreign keys
         $db->exec('PRAGMA foreign_keys = ON');
         $db->exec('PRAGMA journal_mode = WAL');
+        $db->exec('PRAGMA wal_autocheckpoint = 1000');
+        $db->exec('PRAGMA journal_size_limit = 67110000'); // 64MB
     }
     return $db;
 }
@@ -161,28 +163,39 @@ function validateHex(string $hex): bool {
     return preg_match('/^#[0-9A-Fa-f]{6}$/', $hex) === 1;
 }
 
-// Rate limiting
+// Rate limiting with transaction support
 function checkRateLimit(string $key, int $limit, int $window = 900): bool {
     $db = getDatabase();
-    $cutoff = date('Y-m-d H:i:s', time() - $window);
     
-    // Clean old entries
-    $db->exec("DELETE FROM rate_limits WHERE created_at < '$cutoff'");
-    
-    // Check current count
-    $stmt = $db->prepare("SELECT COUNT(*) as cnt FROM rate_limits WHERE key = :key AND created_at > :cutoff");
-    $stmt->execute([':key' => $key, ':cutoff' => $cutoff]);
-    $count = $stmt->fetch()['cnt'];
-    
-    if ($count >= $limit) {
+    try {
+        $db->beginTransaction();
+        
+        $cutoff = date('Y-m-d H:i:s', time() - $window);
+        
+        // Clean old entries
+        $db->exec("DELETE FROM rate_limits WHERE created_at < '$cutoff'");
+        
+        // Check current count
+        $stmt = $db->prepare("SELECT COUNT(*) as cnt FROM rate_limits WHERE key = :key AND created_at > :cutoff");
+        $stmt->execute([':key' => $key, ':cutoff' => $cutoff]);
+        $count = $stmt->fetch()['cnt'];
+        
+        if ($count >= $limit) {
+            $db->rollBack();
+            return false;
+        }
+        
+        // Record attempt
+        $stmt = $db->prepare("INSERT INTO rate_limits (key, created_at) VALUES (:key, datetime('now'))");
+        $stmt->execute([':key' => $key]);
+        
+        $db->commit();
+        return true;
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Rate limit error: " . $e->getMessage());
         return false;
     }
-    
-    // Record attempt
-    $stmt = $db->prepare("INSERT INTO rate_limits (key, created_at) VALUES (:key, datetime('now'))");
-    $stmt->execute([':key' => $key]);
-    
-    return true;
 }
 
 // Create rate limits table if needed

@@ -168,14 +168,14 @@ $csrfToken = generateCSRFToken();
             grid.innerHTML = tiles.map((tile, index) => `
                 <div class="tile-card" data-tile-id="${tile.id}" draggable="true">
                     <div class="drag-handle">⋮⋮</div>
-                    <div class="tile-preview" style="background-image: url('${tile.media?.path_webp || ''}')">
+                    <div class="tile-preview" style="background-image: url('${escapeHtml(tile.media?.path_webp || '')}')">
                         ${!tile.visible ? '<span class="badge">Hidden</span>' : ''}
                     </div>
                     <div class="tile-info">
                         <h3>${escapeHtml(tile.title)}</h3>
                         <p>${escapeHtml(tile.blurb || 'No description')}</p>
                         <div class="tile-meta">
-                            <span>${tile.cta_label} → ${new URL(tile.target_url).hostname}</span>
+                            <span>${escapeHtml(tile.cta_label)} → ${escapeHtml(new URL(tile.target_url).hostname)}</span>
                         </div>
                     </div>
                     <div class="tile-actions">
@@ -272,7 +272,7 @@ $csrfToken = generateCSRFToken();
             
             if (currentTile.media) {
                 document.getElementById('mediaPreview').innerHTML = 
-                    `<img src="${currentTile.media.path_webp}" alt="Preview">`;
+                    `<img src="${escapeHtml(currentTile.media.path_webp)}" alt="Preview">`;
             }
             
             document.getElementById('tileModal').classList.add('active');
@@ -306,7 +306,8 @@ $csrfToken = generateCSRFToken();
                 closeModal();
                 await loadTiles();
             } else {
-                alert('Failed to save tile');
+                const errorData = await response.json();
+                alert(errorData.error || 'Failed to save tile');
             }
         });
         
@@ -339,7 +340,7 @@ $csrfToken = generateCSRFToken();
             const grid = document.getElementById('mediaGrid');
             grid.innerHTML = media.map(m => `
                 <div class="media-item" onclick="selectMedia(${m.id})">
-                    <img src="${m.url}" alt="${m.original_name}">
+                    <img src="${escapeHtml(m.url)}" alt="${escapeHtml(m.original_name)}">
                 </div>
             `).join('');
             
@@ -352,7 +353,7 @@ $csrfToken = generateCSRFToken();
             
             document.getElementById('bg_media_id').value = id;
             document.getElementById('mediaPreview').innerHTML = 
-                `<img src="${selectedMedia.url}" alt="Preview">`;
+                `<img src="${escapeHtml(selectedMedia.url)}" alt="Preview">`;
             
             closeMediaModal();
         }

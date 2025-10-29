@@ -4,7 +4,7 @@
  * Routes all /api/* requests
  */
 
-require_once __DIR__ . '/../../app/bootstrap.php';
+require_once __DIR__ . '/../app/bootstrap.php';
 
 setSecurityHeaders();
 header('Content-Type: application/json');
@@ -160,6 +160,7 @@ function handleLogin(): void {
     }
     
     if (empty($email) || empty($password)) {
+        sleep(1);
         jsonResponse(['error' => 'Email and password required'], 400);
         return;
     }
@@ -175,8 +176,12 @@ function handleLogin(): void {
         return;
     }
     
-    // Successful login
+    // Consistent timing
+    sleep(1);
+    
+    // Successful login - regenerate session ID BEFORE setting session variables
     session_regenerate_id(true);
+    
     $_SESSION['user_id'] = $user['id'];
     $_SESSION['user_email'] = $user['email'];
     $_SESSION['user_role'] = $user['role'];
@@ -277,6 +282,12 @@ function handleCreateTile(): void {
         }
     }
     
+    // Validate slug format
+    if (!preg_match('/^[a-z0-9-]+$/', $input['slug'])) {
+        jsonResponse(['error' => 'Invalid slug format. Use lowercase letters, numbers, and hyphens only.'], 400);
+        return;
+    }
+    
     // Validate URL
     if (!validateUrl($input['target_url'])) {
         jsonResponse(['error' => 'Invalid target URL'], 400);
@@ -331,6 +342,24 @@ function handleUpdateTile(string $id): void {
         return;
     }
     
+    // Validate slug format if provided
+    if (isset($input['slug']) && !preg_match('/^[a-z0-9-]+$/', $input['slug'])) {
+        jsonResponse(['error' => 'Invalid slug format. Use lowercase letters, numbers, and hyphens only.'], 400);
+        return;
+    }
+    
+    // Validate hex color if provided
+    if (isset($input['accent_hex']) && !empty($input['accent_hex']) && !validateHex($input['accent_hex'])) {
+        jsonResponse(['error' => 'Invalid hex color'], 400);
+        return;
+    }
+    
+    // Validate URL if provided
+    if (isset($input['target_url']) && !validateUrl($input['target_url'])) {
+        jsonResponse(['error' => 'Invalid target URL'], 400);
+        return;
+    }
+    
     $db = getDatabase();
     
     // Build dynamic update query
@@ -353,7 +382,7 @@ function handleUpdateTile(string $id): void {
     
     $fields[] = "updated_at = datetime('now')";
     
-    if (empty($fields)) {
+    if (count($fields) === 1) { // Only updated_at
         jsonResponse(['error' => 'No fields to update'], 400);
         return;
     }
@@ -409,7 +438,11 @@ function handleReorderTiles(): void {
     $stmt = $db->prepare("UPDATE tiles SET order_index = :order WHERE id = :id");
     
     foreach ($ids as $order => $id) {
-        $stmt->execute([':order' => $order, ':id' => $id]);
+        // Validate that ID is numeric
+        if (!is_numeric($id)) {
+            continue;
+        }
+        $stmt->execute([':order' => (int)$order, ':id' => (int)$id]);
     }
     
     logActivity('reorder', 'tiles', null, json_encode($ids));
@@ -479,6 +512,12 @@ function handleServeMedia(string $id): void {
 function handleUploadMedia(): void {
     startSecureSession();
     requireAuth();
+    
+    // CSRF validation from POST data
+    if (!isset($_POST['csrf_token']) || !validateCSRFToken($_POST['csrf_token'])) {
+        jsonResponse(['error' => 'Invalid CSRF token'], 403);
+        return;
+    }
     
     // Rate limiting
     $userId = $_SESSION['user_id'];
@@ -680,16 +719,27 @@ function processImage(string $tmpPath, string $originalName): array {
     $ext = pathinfo($originalName, PATHINFO_EXTENSION);
     $basename = $hash;
     
-    // Load image
-    $img = imagecreatefromstring(file_get_contents($tmpPath));
+    // Load and validate image
+    $img = @imagecreatefromstring(file_get_contents($tmpPath));
     
     if (!$img) {
-        throw new Exception('Failed to load image');
+        throw new Exception('Invalid image file');
     }
     
     // Get dimensions
     $width = imagesx($img);
     $height = imagesy($img);
+    
+    // Validate dimensions to prevent DoS
+    if ($width > 10000 || $height > 10000) {
+        imagedestroy($img);
+        throw new Exception('Image dimensions too large (max 10000x10000)');
+    }
+    
+    if ($width * $height > 25000000) { // 25 megapixels
+        imagedestroy($img);
+        throw new Exception('Image resolution too high (max 25 megapixels)');
+    }
     
     // Calculate target dimensions (3:4 ratio)
     $targetRatio = $config['IMAGE_ASPECT_RATIO'];
@@ -743,8 +793,8 @@ function processImage(string $tmpPath, string $originalName): array {
     return [
         'path_original' => $pathOriginal,
         'path_webp' => $pathWebp,
-        'width' => $targetWidth,
-        'height' => $targetHeight,
+        'width' => (int)$targetWidth,
+        'height' => (int)$targetHeight,
         'sizes' => $sizes,
     ];
 }

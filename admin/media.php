@@ -66,6 +66,7 @@ $csrfToken = generateCSRFToken();
     
     <script>
         const CSRF_TOKEN = '<?= $csrfToken ?>';
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
         let media = [];
         
         // Load media
@@ -87,7 +88,7 @@ $csrfToken = generateCSRFToken();
             
             grid.innerHTML = media.map(m => `
                 <div class="media-item-card">
-                    <img src="${m.url}" alt="${m.original_name}">
+                    <img src="${escapeHtml(m.url)}" alt="${escapeHtml(m.original_name)}">
                     <div class="media-info">
                         <div class="media-name">${escapeHtml(m.original_name)}</div>
                         <div class="media-meta">${m.width} × ${m.height}</div>
@@ -127,6 +128,19 @@ $csrfToken = generateCSRFToken();
             const total = filesArray.length;
             let completed = 0;
             
+            // Validate files before uploading
+            for (const file of filesArray) {
+                if (file.size > MAX_FILE_SIZE) {
+                    alert(`${file.name} is too large (max 10MB)`);
+                    return;
+                }
+                
+                if (!file.type.match(/^image\/(jpeg|png|webp)$/)) {
+                    alert(`${file.name} is not a supported image format`);
+                    return;
+                }
+            }
+            
             document.getElementById('uploadProgress').style.display = 'block';
             
             for (const file of filesArray) {
@@ -152,6 +166,7 @@ $csrfToken = generateCSRFToken();
         async function uploadFile(file) {
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('csrf_token', CSRF_TOKEN);
             
             const response = await fetch('/api/media', {
                 method: 'POST',
@@ -159,7 +174,8 @@ $csrfToken = generateCSRFToken();
             });
             
             if (!response.ok) {
-                alert(`Failed to upload ${file.name}`);
+                const error = await response.json();
+                alert(`Failed to upload ${file.name}: ${error.error || 'Unknown error'}`);
             }
         }
         
