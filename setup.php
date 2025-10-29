@@ -11,7 +11,7 @@ $configFile = __DIR__ . '/config/config.php';
 $isInstalled = file_exists($configFile) && filesize($configFile) > 500;
 
 if ($isInstalled && !isset($_GET['reinstall'])) {
-    header('Location: /');
+    header('Location: /admin/login');
     exit;
 }
 
@@ -40,19 +40,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['step'])) {
             break;
             
         case 4: // Complete Setup
-            if (completeSetup($_SESSION['setup'])) {
+            $result = completeSetup($_SESSION['setup']);
+            header('Content-Type: application/json');
+            if ($result) {
                 $_SESSION['setup_complete'] = true;
                 unset($_SESSION['setup']);
+                echo json_encode(['success' => true, 'redirect' => '/admin/login']);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Setup failed']);
             }
-            break;
+            exit;
     }
     
     // Return JSON for AJAX
-    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
-        header('Content-Type: application/json');
-        echo json_encode(['success' => true]);
-        exit;
-    }
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true]);
+    exit;
 }
 
 function completeSetup($data) {
@@ -66,7 +69,10 @@ function completeSetup($data) {
     
     foreach ($dirs as $dir) {
         if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+            if (!mkdir($dir, 0775, true)) {
+                error_log("Failed to create directory: $dir");
+                return false;
+            }
         }
     }
     
@@ -111,7 +117,10 @@ return [
 ];
 PHP;
     
-    file_put_contents(__DIR__ . '/config/config.php', $config);
+    if (!file_put_contents(__DIR__ . '/config/config.php', $config)) {
+        error_log("Failed to write config file");
+        return false;
+    }
     
     // Initialize database
     try {
@@ -119,7 +128,13 @@ PHP;
         $db = getDatabase();
         
         // Create tables
-        $schema = file_get_contents(__DIR__ . '/app/schema.sql');
+        $schemaFile = __DIR__ . '/app/schema.sql';
+        if (!file_exists($schemaFile)) {
+            error_log("Schema file not found: $schemaFile");
+            return false;
+        }
+        
+        $schema = file_get_contents($schemaFile);
         $db->exec($schema);
         
         // Create admin user
@@ -148,14 +163,10 @@ PHP;
         
         return true;
     } catch (Exception $e) {
-        error_log($e->getMessage());
+        error_log("Database setup failed: " . $e->getMessage());
         return false;
     }
 }
-
-// Get current step
-$currentStep = isset($_SESSION['setup']) ? count(array_filter($_SESSION['setup'])) + 1 : 1;
-if ($currentStep > 4) $currentStep = 4;
 
 // Detect site URL
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -215,44 +226,31 @@ $detectedUrl = "$protocol://$host";
         .progress-bar {
             height: 4px;
             background: rgba(255, 255, 255, 0.3);
-            position: relative;
         }
         
         .progress-fill {
             height: 100%;
             background: white;
+            width: 25%;
             transition: width 0.3s ease;
         }
         
-        .wizard-content {
+        .wizard-body {
             padding: 40px;
         }
         
         .step {
             display: none;
-            animation: fadeIn 0.3s ease;
         }
         
         .step.active {
             display: block;
+            animation: fadeIn 0.3s ease;
         }
         
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .step-title {
-            font-size: 24px;
-            font-weight: 700;
-            color: #1a1a1a;
-            margin-bottom: 10px;
-        }
-        
-        .step-description {
-            color: #666;
-            margin-bottom: 30px;
-            line-height: 1.6;
         }
         
         .form-group {
@@ -261,148 +259,88 @@ $detectedUrl = "$protocol://$host";
         
         label {
             display: block;
-            font-weight: 600;
-            color: #333;
             margin-bottom: 8px;
-            font-size: 14px;
+            font-weight: 500;
+            color: #333;
         }
         
         input[type="text"],
         input[type="email"],
         input[type="password"],
-        input[type="url"] {
+        input[type="url"],
+        input[type="color"] {
             width: 100%;
-            padding: 14px 16px;
+            padding: 12px 16px;
             border: 2px solid #e0e0e0;
-            border-radius: 10px;
+            border-radius: 8px;
             font-size: 16px;
             transition: all 0.2s;
-            font-family: inherit;
+        }
+        
+        input[type="color"] {
+            height: 50px;
+            cursor: pointer;
         }
         
         input:focus {
             outline: none;
             border-color: #667eea;
-            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
         }
         
-        input[type="color"] {
-            width: 100%;
-            height: 50px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            cursor: pointer;
-        }
-        
-        .color-preview {
-            display: flex;
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 16px;
         }
         
-        .color-preview > div {
-            flex: 1;
-        }
-        
-        .hint {
-            font-size: 13px;
-            color: #999;
-            margin-top: 6px;
-        }
-        
-        .wizard-actions {
+        .wizard-footer {
             display: flex;
-            gap: 12px;
-            margin-top: 40px;
+            justify-content: space-between;
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
         }
         
         button {
-            flex: 1;
-            padding: 16px;
+            padding: 12px 32px;
             border: none;
-            border-radius: 10px;
+            border-radius: 8px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
-            font-family: inherit;
         }
         
         .btn-primary {
-            background: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
         
         .btn-primary:hover {
-            background: #5568d3;
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
         }
         
         .btn-secondary {
-            background: #f5f5f5;
-            color: #333;
+            background: #f0f0f0;
+            color: #666;
         }
         
         .btn-secondary:hover {
             background: #e0e0e0;
         }
         
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none !important;
-        }
-        
-        .success-message {
-            text-align: center;
-            padding: 40px 20px;
-        }
-        
-        .success-icon {
-            font-size: 80px;
-            margin-bottom: 20px;
-        }
-        
-        .success-message h2 {
-            font-size: 28px;
-            color: #1a1a1a;
-            margin-bottom: 10px;
-        }
-        
-        .success-message p {
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 16px;
-        }
-        
-        .btn-success {
-            background: #10b981;
-            color: white;
-            display: inline-block;
-            padding: 16px 32px;
-            text-decoration: none;
-            border-radius: 10px;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-        
-        .btn-success:hover {
-            background: #059669;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
-        }
-        
-        .loading {
+        .installing {
             text-align: center;
             padding: 40px 20px;
         }
         
         .spinner {
-            border: 4px solid #f3f3f3;
+            width: 60px;
+            height: 60px;
+            border: 4px solid #f0f0f0;
             border-top: 4px solid #667eea;
             border-radius: 50%;
-            width: 50px;
-            height: 50px;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
         }
@@ -412,137 +350,117 @@ $detectedUrl = "$protocol://$host";
             100% { transform: rotate(360deg); }
         }
         
-        .requirements {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 20px;
-            margin-top: 20px;
+        .success-icon {
+            font-size: 60px;
+            color: #10b981;
+            margin-bottom: 20px;
         }
         
-        .requirements h4 {
-            color: #333;
-            margin-bottom: 12px;
+        @media (max-width: 600px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
         }
-        
-        .req-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 0;
-            font-size: 14px;
-        }
-        
-        .req-pass { color: #10b981; }
-        .req-fail { color: #ef4444; }
     </style>
 </head>
 <body>
     <div class="wizard-container">
         <div class="wizard-header">
-            <h1>🚀 Portfolio Hub</h1>
-            <p>Let's get you set up in just a few steps!</p>
+            <h1>🎨 Portfolio Hub</h1>
+            <p>Let's set up your portfolio in 3 easy steps</p>
         </div>
         
         <div class="progress-bar">
-            <div class="progress-fill" id="progressFill" style="width: 25%"></div>
+            <div class="progress-fill" id="progressFill"></div>
         </div>
         
-        <div class="wizard-content">
-            <?php if (isset($_SESSION['setup_complete'])): ?>
-                <div class="success-message">
-                    <div class="success-icon">🎉</div>
-                    <h2>Setup Complete!</h2>
-                    <p>Your portfolio hub is ready to go. Time to create some amazing tiles!</p>
-                    <a href="/admin/login" class="btn-success">Go to Admin Panel</a>
-                </div>
-            <?php else: ?>
-                <!-- Step 1: Site Information -->
-                <div class="step active" data-step="1">
-                    <h2 class="step-title">Site Information</h2>
-                    <p class="step-description">Let's start with the basics. What should we call your portfolio hub?</p>
-                    
-                    <div class="form-group">
-                        <label for="site_title">Site Title</label>
-                        <input type="text" id="site_title" name="site_title" value="<?= htmlspecialchars($_SESSION['setup']['site_title'] ?? '') ?>" placeholder="John Doe - Portfolio Hub" required>
-                        <div class="hint">This appears in browser tabs and search results</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="site_url">Site URL</label>
-                        <input type="url" id="site_url" name="site_url" value="<?= htmlspecialchars($_SESSION['setup']['site_url'] ?? $detectedUrl) ?>" placeholder="https://yourname.com" required>
-                        <div class="hint">Your website's full URL (we auto-detected this one!)</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="hero_text">Hero Text</label>
-                        <input type="text" id="hero_text" name="hero_text" value="<?= htmlspecialchars($_SESSION['setup']['hero_text'] ?? '') ?>" placeholder="Your Name" required>
-                        <div class="hint">Large text at the top of your homepage</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="hero_subtext">Hero Subtext</label>
-                        <input type="text" id="hero_subtext" name="hero_subtext" value="<?= htmlspecialchars($_SESSION['setup']['hero_subtext'] ?? '') ?>" placeholder="Designer • Developer • Creator" required>
-                        <div class="hint">Subtitle describing what you do</div>
-                    </div>
+        <div class="wizard-body">
+            <!-- Step 1: Site Information -->
+            <div class="step active" data-step="1">
+                <h2 style="margin-bottom: 24px;">Site Information</h2>
+                
+                <div class="form-group">
+                    <label for="site_title">Site Title *</label>
+                    <input type="text" id="site_title" name="site_title" required 
+                           placeholder="Your Name - Portfolio Hub">
                 </div>
                 
-                <!-- Step 2: Admin Account -->
-                <div class="step" data-step="2">
-                    <h2 class="step-title">Admin Account</h2>
-                    <p class="step-description">Create your admin account to manage tiles and settings.</p>
-                    
-                    <div class="form-group">
-                        <label for="admin_email">Email Address</label>
-                        <input type="email" id="admin_email" name="admin_email" value="<?= htmlspecialchars($_SESSION['setup']['admin_email'] ?? '') ?>" placeholder="you@example.com" required>
-                        <div class="hint">You'll use this to login</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="admin_password">Password</label>
-                        <input type="password" id="admin_password" name="admin_password" placeholder="Choose a strong password" required minlength="8">
-                        <div class="hint">At least 8 characters</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="admin_password_confirm">Confirm Password</label>
-                        <input type="password" id="admin_password_confirm" name="admin_password_confirm" placeholder="Type your password again" required>
-                    </div>
+                <div class="form-group">
+                    <label for="site_url">Site URL *</label>
+                    <input type="url" id="site_url" name="site_url" required 
+                           value="<?= htmlspecialchars($detectedUrl) ?>">
                 </div>
                 
-                <!-- Step 3: Theme -->
-                <div class="step" data-step="3">
-                    <h2 class="step-title">Choose Your Colors</h2>
-                    <p class="step-description">Pick colors that match your brand. You can change these later!</p>
+                <div class="form-group">
+                    <label for="hero_text">Hero Text *</label>
+                    <input type="text" id="hero_text" name="hero_text" required 
+                           placeholder="Your Name">
+                </div>
+                
+                <div class="form-group">
+                    <label for="hero_subtext">Hero Subtext *</label>
+                    <input type="text" id="hero_subtext" name="hero_subtext" required 
+                           placeholder="Designer • Developer • Creator">
+                </div>
+            </div>
+            
+            <!-- Step 2: Admin Account -->
+            <div class="step" data-step="2">
+                <h2 style="margin-bottom: 24px;">Admin Account</h2>
+                
+                <div class="form-group">
+                    <label for="admin_email">Email Address *</label>
+                    <input type="email" id="admin_email" name="admin_email" required 
+                           placeholder="admin@example.com">
+                </div>
+                
+                <div class="form-group">
+                    <label for="admin_password">Password *</label>
+                    <input type="password" id="admin_password" name="admin_password" required 
+                           placeholder="At least 8 characters">
+                </div>
+                
+                <div class="form-group">
+                    <label for="admin_password_confirm">Confirm Password *</label>
+                    <input type="password" id="admin_password_confirm" name="admin_password_confirm" required 
+                           placeholder="Re-enter your password">
+                </div>
+            </div>
+            
+            <!-- Step 3: Theme -->
+            <div class="step" data-step="3">
+                <h2 style="margin-bottom: 24px;">Choose Your Colors</h2>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="primary_color">Primary Color</label>
+                        <input type="color" id="primary_color" name="primary_color" value="#6366f1">
+                    </div>
                     
-                    <div class="color-preview">
-                        <div class="form-group">
-                            <label for="primary_color">Primary Color</label>
-                            <input type="color" id="primary_color" name="primary_color" value="<?= htmlspecialchars($_SESSION['setup']['primary_color'] ?? '#6366f1') ?>">
-                            <div class="hint">Main accent color</div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="secondary_color">Secondary Color</label>
-                            <input type="color" id="secondary_color" name="secondary_color" value="<?= htmlspecialchars($_SESSION['setup']['secondary_color'] ?? '#8b5cf6') ?>">
-                            <div class="hint">Complement color</div>
-                        </div>
+                    <div class="form-group">
+                        <label for="secondary_color">Secondary Color</label>
+                        <input type="color" id="secondary_color" name="secondary_color" value="#8b5cf6">
                     </div>
                 </div>
-                
-                <!-- Step 4: Installation -->
-                <div class="step" data-step="4">
-                    <div class="loading">
-                        <div class="spinner"></div>
-                        <h2 class="step-title">Setting up your portfolio...</h2>
-                        <p class="step-description">Creating database, configuring settings, and preparing everything for you.</p>
-                    </div>
+            </div>
+            
+            <!-- Step 4: Installing -->
+            <div class="step" data-step="4">
+                <div class="installing">
+                    <div class="spinner"></div>
+                    <h2>Setting up your portfolio...</h2>
+                    <p style="color: #666; margin-top: 12px;">This will only take a moment</p>
                 </div>
-                
-                <div class="wizard-actions">
-                    <button type="button" class="btn-secondary" id="prevBtn" style="display: none;">← Back</button>
-                    <button type="button" class="btn-primary" id="nextBtn">Next →</button>
-                </div>
-            <?php endif; ?>
+            </div>
+            
+            <div class="wizard-footer">
+                <button type="button" class="btn-secondary" id="prevBtn" style="display: none;">
+                    ← Back
+                </button>
+                <button type="button" class="btn-primary" id="nextBtn">
+                    Next →
+                </button>
+            </div>
         </div>
     </div>
     
@@ -559,8 +477,12 @@ $detectedUrl = "$protocol://$host";
             document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
             document.querySelector(`[data-step="${step}"]`).classList.add('active');
             
-            document.getElementById('prevBtn').style.display = step > 1 ? 'block' : 'none';
-            document.getElementById('nextBtn').textContent = step === 3 ? 'Complete Setup' : 'Next →';
+            document.getElementById('prevBtn').style.display = step > 1 && step < 4 ? 'block' : 'none';
+            document.getElementById('nextBtn').style.display = step < 4 ? 'block' : 'none';
+            
+            if (step < 4) {
+                document.getElementById('nextBtn').textContent = step === 3 ? 'Complete Setup' : 'Next →';
+            }
             
             updateProgress();
         }
@@ -605,24 +527,24 @@ $detectedUrl = "$protocol://$host";
             const formData = new FormData();
             formData.append('step', step);
             
-            const inputs = document.querySelectorAll(`[data-step="${step}"] input`);
+            const inputs = document.querySelectorAll(`[data-step="${step}"] input:not([name$="_confirm"])`);
             inputs.forEach(input => {
-                formData.append(input.name, input.value);
+                if (input.name) {
+                    formData.append(input.name, input.value);
+                }
             });
             
             try {
                 const response = await fetch('setup.php', {
                     method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
+                    body: formData
                 });
                 
-                return response.ok;
+                const data = await response.json();
+                return data;
             } catch (error) {
                 console.error('Save failed:', error);
-                return false;
+                return { success: false };
             }
         }
         
@@ -631,23 +553,52 @@ $detectedUrl = "$protocol://$host";
                 return;
             }
             
-            // Save current step
-            const saved = await saveStep(currentStep);
+            // Disable button during processing
+            const nextBtn = document.getElementById('nextBtn');
+            nextBtn.disabled = true;
+            nextBtn.style.opacity = '0.6';
             
-            if (!saved && currentStep < 4) {
+            // Save current step
+            const result = await saveStep(currentStep);
+            
+            if (!result.success) {
                 alert('Failed to save. Please try again.');
+                nextBtn.disabled = false;
+                nextBtn.style.opacity = '1';
                 return;
             }
             
-            if (currentStep < totalSteps) {
+            // Move to next step
+            if (currentStep < 3) {
                 currentStep++;
                 showStep(currentStep);
+                nextBtn.disabled = false;
+                nextBtn.style.opacity = '1';
+            } else if (currentStep === 3) {
+                // Trigger step 4 (installation)
+                currentStep = 4;
+                showStep(currentStep);
                 
-                // Trigger installation on step 4
-                if (currentStep === 4) {
+                // Actually run the installation
+                const installResult = await saveStep(4);
+                
+                if (installResult.success && installResult.redirect) {
+                    // Show success briefly
+                    document.querySelector('[data-step="4"] .installing').innerHTML = `
+                        <div class="success-icon">✓</div>
+                        <h2>Setup Complete!</h2>
+                        <p style="color: #666; margin-top: 12px;">Redirecting to login...</p>
+                    `;
+                    
                     setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
+                        window.location.href = installResult.redirect;
+                    }, 1500);
+                } else {
+                    alert('Setup failed. Please check server logs and try again.');
+                    currentStep = 3;
+                    showStep(currentStep);
+                    nextBtn.disabled = false;
+                    nextBtn.style.opacity = '1';
                 }
             }
         });
