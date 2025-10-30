@@ -1,90 +1,107 @@
-# Portfolio Hub - Split-Panel Gallery
+# Cardinal
 
-A modern, animated portfolio landing hub with an admin panel for managing tiles/panels that link to your sub-domains.
+A modern, secure portfolio landing hub featuring an animated split-panel gallery with a full-featured admin panel for managing your project showcases.
+
+![Version](https://img.shields.io/badge/version-2.0-blue)
+![PHP](https://img.shields.io/badge/PHP-8.2+-purple)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+## Overview
+
+Cardinal provides a beautiful, animated landing page where visitors can explore your portfolio through an interactive split-panel gallery. Each panel can link to your projects, subdomains, or external sites. The admin panel gives you complete control over content, media, and site settings.
 
 ## Features
 
-✨ **Public Site**
-- Smooth split-panel gallery with hover effects and expansion animations
-- Mobile-responsive with bottom drawer on mobile
-- GSAP-free vanilla JS animations with GPU acceleration
-- Respects `prefers-reduced-motion`
-- Optional auto-cycle through panels
-- WebP images with responsive srcset
-- Keyboard accessible
-- SEO optimized with JSON-LD schema
+### Public Site
+- **Split-Panel Gallery** - Smooth hover effects with expansion animations
+- **Mobile Responsive** - Adaptive layout with bottom drawer on mobile devices
+- **GPU-Accelerated** - Vanilla JavaScript animations with hardware acceleration
+- **Accessibility** - Keyboard navigation, ARIA labels, respects `prefers-reduced-motion`
+- **Performance** - Lazy loading, WebP images, responsive srcset, optimized delivery
+- **SEO Optimized** - Semantic HTML, JSON-LD schema, meta tags
 
-🔐 **Admin Panel**
-- Full CRUD for tiles (create, edit, delete, reorder)
-- Drag-and-drop reordering
-- Media library with upload, optimization, and WebP generation
-- Settings management
-- Activity logging
-- CSRF protection
-- Rate limiting on auth and uploads
-- Argon2id password hashing
+### Admin Panel
+- **Tile Management** - Full CRUD operations: create, edit, delete, reorder
+- **Drag-and-Drop** - Intuitive reordering with visual feedback
+- **Media Library** - Upload, optimize, and manage images with automatic WebP conversion
+- **Settings Editor** - Customize site title, colors, hero text, and behavior
+- **Activity Logging** - Comprehensive audit trail of all admin actions
+- **Live Preview** - See changes before publishing
+
+### Security Features
+- **Argon2id Password Hashing** - Industry-standard password protection
+- **CSRF Protection** - Token validation on all state-changing requests
+- **Rate Limiting** - Protection against brute force attacks
+- **Session Security** - HttpOnly cookies, session regeneration, secure flags
+- **Input Validation** - Strict validation on all user inputs
+- **SQL Injection Protection** - Prepared statements with PDO
+- **Image Validation** - Memory exhaustion prevention, dimension limits
+- **Timing Attack Mitigation** - Consistent response times for auth failures
+- **Security Headers** - CSP, X-Frame-Options, X-Content-Type-Options
 
 ## Tech Stack
 
-- **Frontend**: HTML5, CSS3, Vanilla JavaScript (ES6)
-- **Backend**: PHP 8.2+
-- **Database**: SQLite 3
-- **Image Processing**: GD library
-- **Security**: Argon2id, CSRF tokens, CSP headers, rate limiting
+**Frontend**
+- HTML5, CSS3, Vanilla JavaScript (ES6+)
+- No external dependencies
+- GPU-accelerated animations
+
+**Backend**
+- PHP 8.2+
+- SQLite 3 with WAL mode
+- PDO for database operations
+
+**Image Processing**
+- PHP GD library
+- WebP conversion
+- Responsive image generation (480, 768, 1080, 1440, 1920px)
+- Automatic cropping to 3:4 aspect ratio
 
 ## Requirements
 
-- PHP 8.2 or higher
-- PHP GD extension
-- SQLite 3
-- Apache or Nginx with mod_rewrite
-- HTTPS (recommended for production)
+- **PHP 8.2 or higher**
+- **PHP Extensions**: GD, PDO, SQLite3
+- **Web Server**: Apache (with mod_rewrite) or Nginx
+- **HTTPS** (recommended for production)
 
-## Installation
+## Quick Start
 
-### 1. Clone/Upload Files
+### 1. Upload Files
 
-Upload all files to your web server. The document root should point to the `/public` directory.
+Upload all project files to your web server. Set your document root to the `/public` directory.
 
-### 2. Configure Environment
+### 2. Run Setup Wizard
 
-Copy `.env.php` and update the values:
+Navigate to your site in a web browser. You'll be automatically redirected to the setup wizard.
 
-```php
-'APP_ENV' => 'production',
-'APP_URL' => 'https://yourname.com',
-'ADMIN_EMAIL_SEED' => 'admin@yourname.com',
-'ADMIN_PASSWORD_SEED' => 'your-secure-password',
-'SESSION_SECURE' => true, // Set true if using HTTPS
 ```
+https://yoursite.com
+```
+
+The wizard will guide you through:
+
+1. **Site Information** - Title, URL, hero text, subtitle
+2. **Admin Account** - Email and password setup
+3. **Theme Colors** - Primary and secondary brand colors
+4. **Completion** - Automatic database and configuration creation
 
 ### 3. Set Permissions
 
-```bash
-chmod 755 /path/to/project
-chmod 775 /path/to/project/data
-chmod 775 /path/to/project/uploads
-chmod 775 /path/to/project/backups
-```
-
-### 4. Initialize Database
+After setup, ensure proper file permissions:
 
 ```bash
-php init-db.php
+chmod 755 /path/to/cardinal
+chmod 775 /path/to/cardinal/data
+chmod 775 /path/to/cardinal/uploads
+chmod 775 /path/to/cardinal/backups
+chmod 775 /path/to/cardinal/config
 ```
 
-This will:
-- Create all database tables
-- Insert default settings
-- Create the admin user
+### 4. Configure Web Server
 
-**⚠️ IMPORTANT**: Change the admin password immediately after first login!
+#### Apache
 
-### 5. Configure Web Server
-
-#### Apache (.htaccess)
-
-Create `/public/.htaccess`:
+Create or verify `/public/.htaccess`:
 
 ```apache
 RewriteEngine On
@@ -105,24 +122,24 @@ RewriteRule ^ index.php [L]
 
 ```nginx
 server {
-    listen 80;
-    server_name yourname.com;
-    root /path/to/project/public;
+    listen 443 ssl http2;
+    server_name yoursite.com;
+    root /path/to/cardinal/public;
     index index.php;
 
     # Security headers
-    add_header X-Frame-Options "DENY";
-    add_header X-Content-Type-Options "nosniff";
-    add_header Referrer-Policy "strict-origin-when-cross-origin";
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     # API routing
     location /api/ {
-        rewrite ^/api/(.*)$ /api/index.php last;
+        try_files $uri $uri/ /api/index.php?$query_string;
     }
 
     # Admin routing
     location /admin/ {
-        try_files $uri $uri/ /admin/$uri.php;
+        try_files $uri $uri/ /admin/$1;
     }
 
     # PHP processing
@@ -141,150 +158,163 @@ server {
 }
 ```
 
-## Usage
+### 5. Access Admin Panel
 
-### Admin Access
+```
+https://yoursite.com/admin/login
+```
 
-1. Navigate to `https://yourname.com/admin/login`
-2. Login with your admin credentials
-3. Change password in Settings
-
-### Creating Tiles
-
-1. Go to **Tiles** in admin
-2. Click **+ New Tile**
-3. Fill in:
-   - **Slug**: URL-friendly identifier
-   - **Title**: Display name
-   - **Description**: Short blurb (1-2 sentences)
-   - **Button Label**: CTA text (default: "Visit")
-   - **Target URL**: Your sub-domain or external link
-   - **Accent Color**: Brand color for text overlay
-   - **Background Image**: Choose from media library
-   - **Visible**: Toggle visibility
-   - **Publish Date**: Optional scheduled publishing
-
-4. Click **Save**
-
-### Uploading Media
-
-1. Go to **Media** in admin
-2. Click or drag images into the upload zone
-3. Images are automatically:
-   - Cropped to 3:4 ratio
-   - Converted to WebP
-   - Resized to responsive variants (480, 768, 1080, 1440, 1920)
-   - Optimized to 75% quality
-
-### Reordering Tiles
-
-Simply drag and drop tiles in the admin tiles page. Order is saved automatically.
-
-### Settings
-
-Configure:
-- Site title and description
-- Hero text and subtitle
-- Brand colors
-- Autoplay settings
-- Animation speed
-- Open links in new tab
+Login with the credentials you created during setup.
 
 ## File Structure
 
 ```
-project/
-├── public/             # Web root
-│   └── index.php       # Public landing page
-├── api/                # API endpoints
-│   └── index.php       # API router
-├── admin/              # Admin panel
-│   ├── login.php
-│   ├── tiles.php
-│   ├── media.php
-│   ├── settings.php
+cardinal/
+├── public/                      # Web root (document root)
+│   └── index.php               # Public landing page
+│
+├── admin/                       # Admin panel
+│   ├── login.php              # Authentication
+│   ├── tiles.php              # Tile management
+│   ├── media.php              # Media library
+│   ├── settings.php           # Site settings
+│   ├── preview.php            # Live preview
 │   └── assets/
-│       └── admin.css
-├── app/                # Core application
-│   └── bootstrap.php   # Bootstrap & helpers
-├── data/               # SQLite database & logs
-│   └── site.db
-├── uploads/            # Media files
-├── backups/            # Database backups
-├── .env.php            # Configuration
-└── init-db.php         # Database initialization
+│       └── admin.css          # Admin styling
+│
+├── api/                         # REST API
+│   └── index.php              # API router
+│
+├── app/                         # Core application
+│   ├── bootstrap.php          # Bootstrap & helpers
+│   └── schema.sql             # Database schema
+│
+├── config/                      # Configuration (created by setup)
+│   └── config.php             # Generated config file
+│
+├── data/                        # Data storage (created by setup)
+│   ├── site.db                # SQLite database
+│   ├── error.log              # Error logs
+│   └── setup-error.log        # Setup errors
+│
+├── uploads/                     # Media files (created by setup)
+├── backups/                     # DB backups (created by setup)
+│
+├── index.php                    # Main router
+├── setup.php                    # Setup wizard
+├── backup.php                   # Backup utility
+├── check-tiles.php              # Debug helper
+└── README.md                    # This file
 ```
 
-## API Endpoints
+## Database Schema
 
-### Public
-- `GET /api/public/tiles` - Get visible tiles
-- `GET /api/health` - Health check
+Cardinal uses SQLite with 6 optimized tables:
 
-### Auth (requires authentication)
-- `POST /api/auth/login` - Login
-- `POST /api/auth/logout` - Logout
+| Table | Purpose |
+|-------|---------|
+| `tiles` | Portfolio panels with metadata |
+| `media` | Image files with responsive variants |
+| `users` | Admin accounts |
+| `settings` | Site configuration key-value pairs |
+| `activity_log` | Audit trail for admin actions |
+| `rate_limits` | Rate limiting tracking |
 
-### Tiles (requires authentication)
-- `GET /api/tiles` - List all tiles
-- `GET /api/tiles/{id}` - Get tile
-- `POST /api/tiles` - Create tile
-- `PUT /api/tiles/{id}` - Update tile
-- `DELETE /api/tiles/{id}` - Delete tile
-- `PATCH /api/tiles/reorder` - Reorder tiles
+All tables include appropriate indexes for optimal query performance.
 
-### Media (requires authentication)
-- `GET /api/media` - List media
-- `GET /api/media/serve/{id}` - Serve media file
-- `POST /api/media` - Upload media
-- `DELETE /api/media/{id}` - Delete media
+## Usage Guide
 
-### Settings (requires authentication)
-- `GET /api/settings` - Get all settings
-- `PUT /api/settings` - Update settings
+### Creating Your First Tile
 
-## Security
+1. Navigate to **Admin → Media**
+2. Upload an image (JPG, PNG, or WebP)
+   - Automatically cropped to 3:4 ratio
+   - Converted to WebP format
+   - Multiple responsive sizes generated
+3. Navigate to **Admin → Tiles**
+4. Click **+ New Tile**
+5. Fill in the form:
+   - **Slug**: URL-friendly identifier (e.g., `my-project`)
+   - **Title**: Display name (e.g., `My Project`)
+   - **Blurb**: Short description (1-2 sentences)
+   - **CTA Label**: Button text (default: "Visit")
+   - **Target URL**: Destination link
+   - **Accent Color**: Hex color for text overlay (e.g., `#6366f1`)
+   - **Background Image**: Select from media library
+   - **Visible**: Toggle visibility
+   - **Publish Date**: Optional scheduled publishing
+6. Click **Save**
+
+### Reordering Tiles
+
+Simply drag and drop tiles in the tiles list. Changes are saved automatically.
+
+### Managing Media
+
+- **Upload**: Drag and drop or click to browse
+- **Delete**: Click trash icon (warns if used by tiles)
+- **Automatic Optimization**:
+  - Cropped to 3:4 aspect ratio
+  - Converted to WebP (75% quality)
+  - Responsive variants: 480, 768, 1080, 1440, 1920px
+  - EXIF data stripped for privacy
+
+### Customizing Settings
+
+Navigate to **Admin → Settings** to configure:
+
+- **Site Identity**: Title, description, meta tags
+- **Hero Section**: Main text and subtitle
+- **Brand Colors**: Primary and secondary colors
+- **Behavior**: Autoplay, animation speed, link target
+- **Admin Account**: Change email or password
+
+## API Reference
+
+### Public Endpoints
+
+```
+GET  /api/public/tiles      Get all visible tiles
+GET  /api/health           System health check
+```
 
 ### Authentication
-- Passwords hashed with Argon2id
-- Secure session management with HttpOnly cookies
-- Session ID regeneration
-- Rate limiting on login (5 attempts per 15 minutes)
 
-### CSRF Protection
-- All state-changing requests require CSRF token
-- Token validated server-side
+```
+POST /api/auth/login       Login (rate limited: 5 attempts/15min)
+POST /api/auth/logout      Logout
+```
 
-### File Uploads
-- MIME type validation
-- File size limits (10MB default)
-- Images re-encoded to strip EXIF
-- Stored with content-hash filenames
+### Tiles (Authentication Required)
 
-### Headers
-- Content Security Policy
-- X-Frame-Options
-- X-Content-Type-Options
-- Referrer-Policy
+```
+GET    /api/tiles          List all tiles
+GET    /api/tiles/{id}     Get specific tile
+POST   /api/tiles          Create new tile
+PUT    /api/tiles/{id}     Update tile
+DELETE /api/tiles/{id}     Delete tile
+PATCH  /api/tiles/reorder  Batch reorder tiles
+```
 
-## Performance
+### Media (Authentication Required)
 
-### Optimizations
-- Critical CSS inlined
-- Lazy loading for images
-- WebP format with fallbacks
-- Responsive srcset
-- GPU-accelerated animations
-- WAL mode for SQLite
-- Cache headers for static assets
+```
+GET    /api/media          List all media
+POST   /api/media          Upload image (rate limited: 20 attempts/15min)
+GET    /api/media/serve/{id}  Serve image file
+DELETE /api/media/{id}     Delete media
+```
 
-### Lighthouse Scores Target
-- Performance: 90+
-- Accessibility: 90+
-- Best Practices: 90+
-- SEO: 100
+### Settings (Authentication Required)
 
-## Backup
+```
+GET  /api/settings         Get all settings
+PUT  /api/settings         Update settings (batch)
+```
+
+All authenticated endpoints require a valid session and CSRF token.
+
+## Backup & Restore
 
 ### Manual Backup
 
@@ -292,63 +322,153 @@ project/
 php backup.php
 ```
 
+Creates a timestamped backup in `/backups` containing:
+- Database snapshot (`site.db`)
+- Uploads directory
+
 ### Automated Backup (Cron)
 
+Add to your crontab for daily backups at 3 AM:
+
 ```bash
-# Add to crontab: daily backup at 3 AM
-0 3 * * * /usr/bin/php /path/to/project/backup.php
+0 3 * * * /usr/bin/php /path/to/cardinal/backup.php
 ```
 
-Backups are stored in `/backups` and kept for 14 days.
+Backups are automatically retained for 14 days (configurable in settings).
 
-## Troubleshooting
+### Restore from Backup
 
-### Database Locked
-- Ensure web server has write permissions to `/data`
-- Check if another process is using the database
-- Verify WAL mode is enabled
+```bash
+# Restore database
+cp backups/backup-YYYYMMDD-HHMMSS/site.db data/site.db
 
-### Images Not Uploading
-- Check PHP upload_max_filesize and post_max_size
-- Verify GD extension is installed: `php -m | grep gd`
-- Ensure `/uploads` has write permissions
-
-### Session Issues
-- Verify session.cookie_secure matches HTTPS usage
-- Check session storage permissions
-- Clear browser cookies
-
-### Rate Limit Errors
-- Rate limits reset after time window
-- Check logs in `/data/error.log`
+# Restore uploads
+cp -r backups/backup-YYYYMMDD-HHMMSS/uploads/* uploads/
+```
 
 ## Customization
 
-### Animation Speed
+### Changing Panel Aspect Ratio
 
-Edit in Settings or modify `/public/index.php`:
+Edit `/config/config.php`:
 
-```javascript
+```php
+'IMAGE_ASPECT_RATIO' => 0.75,  // 3:4 (change to 0.5625 for 16:9)
+```
+
+### Adjusting Upload Limits
+
+Edit `/config/config.php`:
+
+```php
+'UPLOAD_MAX_MB' => 10,  // Maximum file size in megabytes
+```
+
+Also update your `php.ini`:
+
+```ini
+upload_max_filesize = 10M
+post_max_size = 10M
+```
+
+### Modifying Animation Speed
+
+Edit the transition timing in `/public/index.php` CSS:
+
+```css
 transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 ```
 
-### Panel Ratios
+### Adding Custom CSS
 
-Edit in `bootstrap.php`:
+Add custom styles to `/admin/assets/admin.css` or inline in `/public/index.php`.
 
-```php
-'IMAGE_ASPECT_RATIO' => 0.75, // 3:4 ratio (change to 0.5625 for 16:9)
-```
+## Performance Optimization
 
-### Color Scheme
+Cardinal is built for speed:
 
-Update CSS variables in `/public/index.php`:
+- **Critical CSS Inlined** - No render-blocking stylesheets
+- **Lazy Loading** - Images load as they enter viewport
+- **WebP Format** - Modern compression with fallbacks
+- **Responsive Images** - Appropriate size served per device
+- **GPU Acceleration** - Transform and opacity animations
+- **WAL Mode** - SQLite write-ahead logging for concurrency
+- **Cache Headers** - Long-term caching for static assets
 
-```css
-:root {
-    --primary: #6366f1;
-    --secondary: #8b5cf6;
-}
+### Lighthouse Targets
+
+- Performance: 90+
+- Accessibility: 90+
+- Best Practices: 90+
+- SEO: 100
+
+## Troubleshooting
+
+### Setup Wizard Loops
+
+If the setup wizard redirects infinitely:
+- Check that `/config/config.php` was created
+- Verify web server has write permissions to `/config`
+- Check `/data/setup-error.log` for errors
+
+### Database Locked Errors
+
+- Ensure web server has write permissions to `/data`
+- Verify no other process is using `site.db`
+- Check that WAL mode is enabled (automatic in setup)
+
+### Images Not Displaying
+
+- Verify GD extension: `php -m | grep gd`
+- Check file permissions on `/uploads`
+- Ensure web server can serve files from `/uploads`
+- Check browser console for CORS or 404 errors
+
+### Upload Failures
+
+- Verify PHP `upload_max_filesize` and `post_max_size` settings
+- Check `/data/error.log` for detailed errors
+- Ensure `/uploads` directory exists and is writable
+- Verify image meets size and dimension limits
+
+### Login Issues
+
+- Clear browser cookies and cache
+- Verify credentials in database
+- Check for rate limiting (5 attempts per 15 minutes)
+- Review `/data/error.log` for authentication errors
+
+### Rate Limit Lockout
+
+Rate limits automatically reset after the time window:
+- **Login**: 5 attempts per 15 minutes
+- **Media Upload**: 20 uploads per 15 minutes
+
+Check `/data/site.db` → `rate_limits` table or wait 15 minutes.
+
+## Security Best Practices
+
+### Post-Installation Security Checklist
+
+- [ ] Change admin password immediately after first login
+- [ ] Enable HTTPS with valid SSL certificate
+- [ ] Set `SESSION_SECURE` to `true` in `/config/config.php`
+- [ ] Verify file permissions (755 for directories, 644 for files)
+- [ ] Enable firewall rules to restrict admin panel access
+- [ ] Set up automated backups
+- [ ] Monitor `/data/error.log` regularly
+- [ ] Keep PHP version updated
+- [ ] Review activity log in admin panel periodically
+
+### Recommended `.gitignore`
+
+```gitignore
+/config/config.php
+/data/
+/uploads/
+/backups/
+.env
+*.log
 ```
 
 ## Deployment
@@ -356,37 +476,118 @@ Update CSS variables in `/public/index.php`:
 ### Via rsync
 
 ```bash
-rsync -avz --exclude 'data/' --exclude 'uploads/' \
-  /local/path/ user@server:/path/to/project/
+rsync -avz --exclude 'data/' --exclude 'uploads/' --exclude 'config/' \
+  /local/cardinal/ user@server:/path/to/cardinal/
 ```
 
-### Via FTP
+### Via Git
 
-Upload all files except:
-- `/data` (create fresh on server)
-- `/uploads` (backed up separately)
-- `/backups`
+```bash
+git clone https://github.com/yourusername/cardinal.git
+cd cardinal
+# Run setup wizard via browser
+```
 
-### Post-Deployment
+### Post-Deployment Checklist
 
-1. Run `php init-db.php` on server
-2. Set correct permissions
-3. Configure web server
-4. Test `/api/health` endpoint
-5. Warm cache by visiting `/`
+1. [ ] Upload all files to server
+2. [ ] Set document root to `/public`
+3. [ ] Run setup wizard
+4. [ ] Set file permissions
+5. [ ] Configure web server (Apache/Nginx)
+6. [ ] Enable HTTPS
+7. [ ] Test `/api/health` endpoint
+8. [ ] Create first tile and verify display
+9. [ ] Set up automated backups
+10. [ ] Configure DNS and CDN (optional)
 
-## Support
+## Development
 
-For issues or questions:
-1. Check logs in `/data/error.log`
-2. Verify configuration in `.env.php`
-3. Test API health endpoint
-4. Review browser console for JS errors
+### Running Locally
+
+```bash
+# Using PHP built-in server
+cd /path/to/cardinal/public
+php -S localhost:8000
+
+# Visit http://localhost:8000
+```
+
+### Debugging
+
+Enable debug mode in `/config/config.php`:
+
+```php
+'APP_ENV' => 'development',
+```
+
+Check logs:
+- **General Errors**: `/data/error.log`
+- **Setup Errors**: `/data/setup-error.log`
+
+Use the debug helper:
+
+```bash
+php check-tiles.php
+```
+
+## Contributing
+
+Contributions are welcome! Please follow these guidelines:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Changelog
+
+### Version 2.0 (Current)
+
+- Added interactive setup wizard
+- Implemented comprehensive security hardening
+- Added image dimension and resolution validation
+- Improved database indexing for performance
+- Added activity logging and audit trails
+- Enhanced rate limiting with database transactions
+- Fixed session fixation vulnerabilities
+- Added timing attack mitigation
+- Improved error handling and logging
+
+### Version 1.0
+
+- Initial release
+- Split-panel gallery
+- Admin panel with CRUD operations
+- Media library
+- SQLite database
 
 ## License
 
-This project is provided as-is for personal and commercial use.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+For issues, questions, or feature requests:
+
+1. Check `/data/error.log` for technical errors
+2. Review this README and troubleshooting section
+3. Test the `/api/health` endpoint
+4. Open an issue on GitHub with:
+   - PHP version (`php -v`)
+   - Web server type and version
+   - Error logs
+   - Steps to reproduce
 
 ## Credits
 
-Built with modern web standards and best practices for performance, security, and accessibility.
+Built with modern web standards emphasizing:
+- **Performance** - Fast, optimized delivery
+- **Security** - Industry-standard protection
+- **Accessibility** - WCAG 2.1 AA compliance
+- **Simplicity** - No external dependencies
+
+---
+
+**Cardinal** - Showcase your work beautifully.
