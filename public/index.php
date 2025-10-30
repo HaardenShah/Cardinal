@@ -112,7 +112,17 @@ while ($row = $stmt->fetch()) {
             flex: 3;
             transform: scale(1);
         }
-        
+
+        .panel.expanded .panel-title {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+
+        .panel.expanded .panel-content {
+            opacity: 1;
+            pointer-events: all;
+        }
+
         .panel.contracted {
             flex: 0.5;
             opacity: 0.7;
@@ -148,31 +158,56 @@ while ($row = $stmt->fetch()) {
             text-shadow: 0 2px 10px rgba(0,0,0,0.5);
             transition: all 0.3s ease;
         }
-        
-        .panel.expanded .panel-title {
+
+        .panel-content {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
             opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+            text-align: center;
         }
-        
-        .info-drawer {
-            position: fixed;
-            top: 0;
-            right: -500px;
-            width: 450px;
-            height: 100vh;
-            background: rgba(10, 10, 15, 0.95);
-            backdrop-filter: blur(20px);
-            padding: 60px 40px;
-            box-shadow: -10px 0 40px var(--shadow);
-            transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 1000;
-            overflow-y: auto;
+
+        .panel-content-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
         }
-        
-        .info-drawer.active {
-            right: 0;
+
+        .panel-content-blurb {
+            font-size: 1.125rem;
+            line-height: 1.7;
+            color: var(--text-muted);
+            margin-bottom: 30px;
+            max-width: 500px;
         }
-        
-        .drawer-close {
+
+        .panel-content-cta {
+            display: inline-block;
+            padding: 16px 32px;
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .panel-content-cta:hover {
+            background: var(--secondary);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+        }
+
+        .panel-close {
             position: absolute;
             top: 20px;
             right: 20px;
@@ -185,71 +220,52 @@ while ($row = $stmt->fetch()) {
             display: flex;
             align-items: center;
             justify-content: center;
+            font-size: 24px;
+            color: white;
             transition: all 0.2s;
         }
-        
-        .drawer-close:hover {
+
+        .panel-close:hover {
             background: rgba(255,255,255,0.2);
             transform: rotate(90deg);
         }
-        
-        .drawer-title {
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 20px;
-        }
-        
-        .drawer-blurb {
-            font-size: 1.125rem;
-            line-height: 1.7;
-            color: var(--text-muted);
-            margin-bottom: 30px;
-        }
-        
-        .drawer-cta {
-            display: inline-block;
-            padding: 16px 32px;
-            background: var(--primary);
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-        
-        .drawer-cta:hover {
-            background: var(--secondary);
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
-        }
-        
+
         @media (max-width: 768px) {
             .gallery {
                 flex-direction: column;
                 padding: 12px;
             }
-            
+
             .panel {
                 height: 200px;
                 min-height: 200px;
             }
-            
+
             .panel.expanded {
                 height: 400px;
             }
-            
-            .info-drawer {
-                top: auto;
-                bottom: -100%;
-                right: 0;
-                left: 0;
-                width: 100%;
-                height: 70vh;
-                border-radius: 24px 24px 0 0;
+
+            .panel-content {
+                padding: 30px 20px;
             }
-            
-            .info-drawer.active {
-                bottom: 0;
+
+            .panel-content-title {
+                font-size: 1.75rem;
+            }
+
+            .panel-content-blurb {
+                font-size: 1rem;
+                margin-bottom: 20px;
+            }
+
+            .panel-content-cta {
+                padding: 12px 24px;
+            }
+
+            .panel-close {
+                width: 36px;
+                height: 36px;
+                font-size: 20px;
             }
         }
         
@@ -276,13 +292,6 @@ while ($row = $stmt->fetch()) {
     
     <div class="gallery" id="gallery">
         <div class="loading">Loading...</div>
-    </div>
-    
-    <div class="info-drawer" id="drawer">
-        <button class="drawer-close" id="drawerClose" aria-label="Close">×</button>
-        <h2 class="drawer-title" id="drawerTitle"></h2>
-        <p class="drawer-blurb" id="drawerBlurb"></p>
-        <a href="#" class="drawer-cta" id="drawerCta" target="_self"></a>
     </div>
     
     <!-- JSON-LD Schema -->
@@ -434,17 +443,39 @@ while ($row = $stmt->fetch()) {
                 ? `background-image: url('${bgUrl}')`
                 : `background: linear-gradient(135deg, ${tile.accent_hex || '#667eea'} 0%, ${tile.accent_hex || '#764ba2'} 100%)`;
             
+            const linkTarget = <?= json_encode(($settings['open_links_new_tab'] ?? '0') === '1' ? '_blank' : '_self') ?>;
+            const relAttr = linkTarget === '_blank' ? 'rel="noopener noreferrer"' : '';
+
             panel.innerHTML = `
                 <div class="panel-bg" style="${bgStyle}"></div>
                 <div class="panel-overlay" style="background: ${overlayGradient}"></div>
                 <div class="panel-title" style="color: ${textColor}; text-shadow: 0 2px 4px ${textShadowColor}, 0 4px 8px ${textShadowColor}, 0 8px 16px ${textShadowColor};">${escapeHtml(tile.title)}</div>
+                <div class="panel-content">
+                    <button class="panel-close" aria-label="Close">×</button>
+                    <h2 class="panel-content-title">${escapeHtml(tile.title)}</h2>
+                    <p class="panel-content-blurb">${escapeHtml(tile.blurb || '')}</p>
+                    <a href="${escapeHtml(tile.target_url)}" class="panel-content-cta" target="${linkTarget}" ${relAttr}>${escapeHtml(tile.cta_label || 'Visit')}</a>
+                </div>
             `;
             
-            panel.addEventListener('click', () => openPanel(tile));
+            panel.addEventListener('click', (e) => {
+                // Don't open panel if clicking on close button or CTA link
+                if (e.target.closest('.panel-close')) {
+                    e.stopPropagation();
+                    closePanel();
+                    return;
+                }
+                if (e.target.closest('.panel-content-cta')) {
+                    e.stopPropagation();
+                    return;
+                }
+                openPanel(panel, tile);
+            });
+
             panel.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    openPanel(tile);
+                    openPanel(panel, tile);
                 }
             });
             
@@ -466,15 +497,15 @@ while ($row = $stmt->fetch()) {
     }
     
     // Open panel
-    function openPanel(tile) {
+    function openPanel(panelElement, tile) {
         state.userInteracted = true;
         stopAutoplay();
-        
+
         state.activeTile = tile;
-        
+
         // Update panel states
         document.querySelectorAll('.panel').forEach(panel => {
-            if (panel.dataset.tileId === String(tile.id)) {
+            if (panel === panelElement) {
                 panel.classList.add('expanded');
                 panel.classList.remove('contracted');
             } else {
@@ -482,28 +513,13 @@ while ($row = $stmt->fetch()) {
                 panel.classList.remove('expanded');
             }
         });
-        
-        // Update drawer
-        document.getElementById('drawerTitle').textContent = tile.title;
-        document.getElementById('drawerBlurb').textContent = tile.blurb || '';
-        
-        const cta = document.getElementById('drawerCta');
-        cta.textContent = tile.cta_label || 'Visit';
-        cta.href = tile.target_url;
-        cta.target = <?= json_encode(($settings['open_links_new_tab'] ?? '0') === '1' ? '_blank' : '_self') ?>;
-        if (cta.target === '_blank') {
-            cta.rel = 'noopener noreferrer';
-        }
-        
-        document.getElementById('drawer').classList.add('active');
-        
+
         // Track analytics
         trackEvent('panel_open', {tile_id: tile.id, tile_slug: tile.slug});
     }
     
-    // Close drawer
-    function closeDrawer() {
-        document.getElementById('drawer').classList.remove('active');
+    // Close panel
+    function closePanel() {
         document.querySelectorAll('.panel').forEach(panel => {
             panel.classList.remove('expanded', 'contracted');
         });
@@ -514,19 +530,22 @@ while ($row = $stmt->fetch()) {
     function startAutoplay() {
         const interval = <?= intval($settings['autoplay_interval'] ?? 7) ?> * 1000;
         let currentIndex = 0;
-        
+
         state.autoplayInterval = setInterval(() => {
             if (state.userInteracted) {
                 stopAutoplay();
                 return;
             }
-            
+
             if (state.tiles.length === 0) return;
-            
+
+            const panels = document.querySelectorAll('.panel');
+            if (panels.length === 0) return;
+
             currentIndex = (currentIndex + 1) % state.tiles.length;
-            openPanel(state.tiles[currentIndex]);
-            
-            setTimeout(closeDrawer, interval * 0.7);
+            openPanel(panels[currentIndex], state.tiles[currentIndex]);
+
+            setTimeout(closePanel, interval * 0.7);
         }, interval);
     }
     
@@ -563,11 +582,9 @@ while ($row = $stmt->fetch()) {
     }
     
     // Event listeners
-    document.getElementById('drawerClose').addEventListener('click', closeDrawer);
-    
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && state.activeTile) {
-            closeDrawer();
+            closePanel();
         }
     });
     
