@@ -23,10 +23,10 @@ $csrfToken = generateCSRFToken();
         <nav class="sidebar">
             <div class="logo">Portfolio Admin</div>
             <ul class="nav-menu">
-                <li><a href="/admin/tiles">Tiles</a></li>
-                <li><a href="/admin/media">Media</a></li>
-                <li class="active"><a href="/admin/settings">Settings</a></li>
-                <li><a href="/admin/preview" target="_blank">Preview</a></li>
+                <li><a href="/admin/tiles.php">Tiles</a></li>
+                <li><a href="/admin/media.php">Media</a></li>
+                <li class="active"><a href="/admin/settings.php">Settings</a></li>
+                <li><a href="/admin/preview.php" target="_blank">Preview</a></li>
             </ul>
             <div class="user-info">
                 <div><?= htmlspecialchars($user['email']) ?></div>

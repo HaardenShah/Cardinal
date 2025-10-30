@@ -264,8 +264,9 @@ function setSecurityHeaders(): void {
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
     
+    // Allow inline scripts for the public page (needed for embedded JS)
     $csp = "default-src 'self'; " .
-           "script-src 'self' https://cdnjs.cloudflare.com; " .
+           "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; " .
            "style-src 'self' 'unsafe-inline'; " .
            "img-src 'self' data: https:; " .
            "font-src 'self'; " .

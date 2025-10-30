@@ -297,184 +297,283 @@ while ($row = $stmt->fetch()) {
     </script>
     
     <script>
-        // App State
-        const state = {
-            tiles: [],
-            activeTile: null,
-            autoplayInterval: null,
-            userInteracted: false
-        };
-        
-        // Fetch tiles
-        async function loadTiles() {
-            try {
-                const response = await fetch('/api/public/tiles');
-                const data = await response.json();
-                state.tiles = data.tiles || [];
-                renderGallery();
-                
-                <?php if (($settings['autoplay_enabled'] ?? '0') === '1'): ?>
-                startAutoplay();
-                <?php endif; ?>
-            } catch (error) {
-                console.error('Failed to load tiles:', error);
-                document.getElementById('gallery').innerHTML = '<div class="loading">Failed to load content</div>';
-            }
-        }
-        
-        // Render gallery
-        function renderGallery() {
-            const gallery = document.getElementById('gallery');
-            gallery.innerHTML = '';
+    // App State
+    const state = {
+        tiles: [],
+        activeTile: null,
+        autoplayInterval: null,
+        userInteracted: false
+    };
+    
+    // Get average brightness of an image to determine text color
+    async function getImageBrightness(imageUrl) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
             
-            if (state.tiles.length === 0) {
-                gallery.innerHTML = '<div class="loading">No content available</div>';
-                return;
-            }
-            
-            state.tiles.forEach((tile, index) => {
-                const panel = document.createElement('div');
-                panel.className = 'panel';
-                panel.setAttribute('role', 'button');
-                panel.setAttribute('tabindex', '0');
-                panel.setAttribute('aria-label', tile.title);
-                panel.dataset.tileId = tile.id;
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
                 
-                const bgUrl = tile.media?.path_webp || tile.media?.path_original || '';
-                const accentColor = tile.accent_hex || 'var(--primary)';
+                // Sample a small portion at the top where text will be
+                canvas.width = 100;
+                canvas.height = 100;
                 
-                panel.innerHTML = `
-                    <div class="panel-bg" style="background-image: url('${bgUrl}')"></div>
-                    <div class="panel-overlay"></div>
-                    <div class="panel-title" style="color: ${accentColor}">${escapeHtml(tile.title)}</div>
-                `;
+                ctx.drawImage(img, 0, 0, img.width, Math.min(img.height / 3, img.width), 0, 0, 100, 100);
                 
-                panel.addEventListener('click', () => openPanel(tile));
-                panel.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        openPanel(tile);
+                try {
+                    const imageData = ctx.getImageData(0, 0, 100, 100);
+                    const data = imageData.data;
+                    let colorSum = 0;
+                    
+                    // Calculate average brightness
+                    for (let i = 0; i < data.length; i += 4) {
+                        const r = data[i];
+                        const g = data[i + 1];
+                        const b = data[i + 2];
+                        // Use perceived brightness formula
+                        const brightness = (0.299 * r + 0.587 * g + 0.114 * b);
+                        colorSum += brightness;
                     }
-                });
-                
-                gallery.appendChild(panel);
-                
-                // Stagger animation
-                setTimeout(() => {
-                    panel.style.opacity = '1';
-                    panel.style.transform = 'translateY(0)';
-                }, index * 80);
-            });
-        }
-        
-        // Open panel
-        function openPanel(tile) {
-            state.userInteracted = true;
-            stopAutoplay();
-            
-            state.activeTile = tile;
-            
-            // Update panel states
-            document.querySelectorAll('.panel').forEach(panel => {
-                if (panel.dataset.tileId === String(tile.id)) {
-                    panel.classList.add('expanded');
-                    panel.classList.remove('contracted');
-                } else {
-                    panel.classList.add('contracted');
-                    panel.classList.remove('expanded');
+                    
+                    const avgBrightness = colorSum / (data.length / 4);
+                    resolve(avgBrightness);
+                } catch (e) {
+                    // If CORS fails, default to dark text
+                    console.warn('Could not analyze image, using default', e);
+                    resolve(128); // Middle value
                 }
-            });
-            
-            // Update drawer
-            document.getElementById('drawerTitle').textContent = tile.title;
-            document.getElementById('drawerBlurb').textContent = tile.blurb || '';
-            
-            const cta = document.getElementById('drawerCta');
-            cta.textContent = tile.cta_label || 'Visit';
-            cta.href = tile.target_url;
-            cta.target = <?= json_encode(($settings['open_links_new_tab'] ?? '0') === '1' ? '_blank' : '_self') ?>;
-            if (cta.target === '_blank') {
-                cta.rel = 'noopener noreferrer';
-            }
-            
-            document.getElementById('drawer').classList.add('active');
-            
-            // Track analytics
-            trackEvent('panel_open', {tile_id: tile.id, tile_slug: tile.slug});
-        }
-        
-        // Close drawer
-        function closeDrawer() {
-            document.getElementById('drawer').classList.remove('active');
-            document.querySelectorAll('.panel').forEach(panel => {
-                panel.classList.remove('expanded', 'contracted');
-            });
-            state.activeTile = null;
-        }
-        
-        // Autoplay
-        function startAutoplay() {
-            const interval = <?= intval($settings['autoplay_interval'] ?? 7) ?> * 1000;
-            let currentIndex = 0;
-            
-            state.autoplayInterval = setInterval(() => {
-                if (state.userInteracted) {
-                    stopAutoplay();
-                    return;
-                }
-                
-                if (state.tiles.length === 0) return;
-                
-                currentIndex = (currentIndex + 1) % state.tiles.length;
-                openPanel(state.tiles[currentIndex]);
-                
-                setTimeout(closeDrawer, interval * 0.7);
-            }, interval);
-        }
-        
-        function stopAutoplay() {
-            if (state.autoplayInterval) {
-                clearInterval(state.autoplayInterval);
-                state.autoplayInterval = null;
-            }
-        }
-        
-        // Analytics
-        function trackEvent(event, data) {
-            if (navigator.doNotTrack === '1' && <?= json_encode($config['RESPECT_DNT']) ?>) {
-                return;
-            }
-            
-            const payload = {
-                event,
-                timestamp: new Date().toISOString(),
-                ...data
             };
             
-            if (navigator.sendBeacon) {
-                navigator.sendBeacon('/api/analytics', JSON.stringify(payload));
+            img.onerror = function() {
+                resolve(128); // Default to middle brightness
+            };
+            
+            img.src = imageUrl;
+        });
+    }
+    
+    // Fetch tiles
+    async function loadTiles() {
+        console.log('loadTiles() called');
+        try {
+            const apiUrl = '/api/index.php/public/tiles';
+            console.log('Fetching from:', apiUrl);
+            
+            const response = await fetch(apiUrl);
+            console.log('Response status:', response.status);
+            
+            const data = await response.json();
+            console.log('Response data:', data);
+            
+            state.tiles = data.tiles || [];
+            console.log('Loaded tiles:', state.tiles);
+            
+            renderGallery();
+            
+            <?php if (($settings['autoplay_enabled'] ?? '0') === '1'): ?>
+            startAutoplay();
+            <?php endif; ?>
+        } catch (error) {
+            console.error('Failed to load tiles - Error:', error);
+            document.getElementById('gallery').innerHTML = '<div class="loading">Failed to load content. Check console for errors.</div>';
+        }
+    }
+    
+    // Render gallery
+    async function renderGallery() {
+        console.log('renderGallery() called with', state.tiles.length, 'tiles');
+        const gallery = document.getElementById('gallery');
+        gallery.innerHTML = '';
+        
+        if (state.tiles.length === 0) {
+            console.log('No tiles to display');
+            gallery.innerHTML = '<div class="loading">No content available</div>';
+            return;
+        }
+        
+        console.log('Creating panels for tiles...');
+        
+        for (let index = 0; index < state.tiles.length; index++) {
+            const tile = state.tiles[index];
+            console.log('Creating panel for tile:', tile.title);
+            
+            const panel = document.createElement('div');
+            panel.className = 'panel';
+            panel.setAttribute('role', 'button');
+            panel.setAttribute('tabindex', '0');
+            panel.setAttribute('aria-label', tile.title);
+            panel.dataset.tileId = tile.id;
+            
+            // Use background image if available, otherwise use gradient
+            const bgUrl = tile.media?.path_webp || tile.media?.path_original || '';
+            console.log('Tile', tile.title, 'background URL:', bgUrl);
+            
+            let textColor = 'white';
+            let textShadowColor = 'rgba(0,0,0,0.8)';
+            let overlayGradient = 'linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.7) 100%)';
+            
+            // Analyze image brightness if we have an image
+            if (bgUrl) {
+                try {
+                    const brightness = await getImageBrightness(bgUrl);
+                    console.log('Brightness for', tile.title, ':', brightness);
+                    
+                    // If image is bright (> 140), use dark text
+                    if (brightness > 140) {
+                        textColor = '#1a1a1a';
+                        textShadowColor = 'rgba(255,255,255,0.8)';
+                        overlayGradient = 'linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(0,0,0,0.3) 100%)';
+                    }
+                } catch (e) {
+                    console.warn('Could not analyze image brightness', e);
+                }
             }
+            
+            const bgStyle = bgUrl 
+                ? `background-image: url('${bgUrl}')`
+                : `background: linear-gradient(135deg, ${tile.accent_hex || '#667eea'} 0%, ${tile.accent_hex || '#764ba2'} 100%)`;
+            
+            panel.innerHTML = `
+                <div class="panel-bg" style="${bgStyle}"></div>
+                <div class="panel-overlay" style="background: ${overlayGradient}"></div>
+                <div class="panel-title" style="color: ${textColor}; text-shadow: 0 2px 4px ${textShadowColor}, 0 4px 8px ${textShadowColor}, 0 8px 16px ${textShadowColor};">${escapeHtml(tile.title)}</div>
+            `;
+            
+            panel.addEventListener('click', () => openPanel(tile));
+            panel.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openPanel(tile);
+                }
+            });
+            
+            gallery.appendChild(panel);
+            console.log('Panel added to gallery');
+            
+            // Stagger animation
+            panel.style.opacity = '0';
+            panel.style.transform = 'translateY(20px)';
+            panel.style.transition = 'all 0.5s ease';
+            
+            setTimeout(() => {
+                panel.style.opacity = '1';
+                panel.style.transform = 'translateY(0)';
+            }, index * 80);
         }
         
-        // Utility
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+        console.log('Gallery rendering complete. Total panels:', gallery.children.length);
+    }
+    
+    // Open panel
+    function openPanel(tile) {
+        state.userInteracted = true;
+        stopAutoplay();
         
-        // Event listeners
-        document.getElementById('drawerClose').addEventListener('click', closeDrawer);
+        state.activeTile = tile;
         
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && state.activeTile) {
-                closeDrawer();
+        // Update panel states
+        document.querySelectorAll('.panel').forEach(panel => {
+            if (panel.dataset.tileId === String(tile.id)) {
+                panel.classList.add('expanded');
+                panel.classList.remove('contracted');
+            } else {
+                panel.classList.add('contracted');
+                panel.classList.remove('expanded');
             }
         });
         
-        // Initialize
-        loadTiles();
-    </script>
+        // Update drawer
+        document.getElementById('drawerTitle').textContent = tile.title;
+        document.getElementById('drawerBlurb').textContent = tile.blurb || '';
+        
+        const cta = document.getElementById('drawerCta');
+        cta.textContent = tile.cta_label || 'Visit';
+        cta.href = tile.target_url;
+        cta.target = <?= json_encode(($settings['open_links_new_tab'] ?? '0') === '1' ? '_blank' : '_self') ?>;
+        if (cta.target === '_blank') {
+            cta.rel = 'noopener noreferrer';
+        }
+        
+        document.getElementById('drawer').classList.add('active');
+        
+        // Track analytics
+        trackEvent('panel_open', {tile_id: tile.id, tile_slug: tile.slug});
+    }
+    
+    // Close drawer
+    function closeDrawer() {
+        document.getElementById('drawer').classList.remove('active');
+        document.querySelectorAll('.panel').forEach(panel => {
+            panel.classList.remove('expanded', 'contracted');
+        });
+        state.activeTile = null;
+    }
+    
+    // Autoplay
+    function startAutoplay() {
+        const interval = <?= intval($settings['autoplay_interval'] ?? 7) ?> * 1000;
+        let currentIndex = 0;
+        
+        state.autoplayInterval = setInterval(() => {
+            if (state.userInteracted) {
+                stopAutoplay();
+                return;
+            }
+            
+            if (state.tiles.length === 0) return;
+            
+            currentIndex = (currentIndex + 1) % state.tiles.length;
+            openPanel(state.tiles[currentIndex]);
+            
+            setTimeout(closeDrawer, interval * 0.7);
+        }, interval);
+    }
+    
+    function stopAutoplay() {
+        if (state.autoplayInterval) {
+            clearInterval(state.autoplayInterval);
+            state.autoplayInterval = null;
+        }
+    }
+    
+    // Analytics
+    function trackEvent(event, data) {
+        if (navigator.doNotTrack === '1' && <?= json_encode($config['RESPECT_DNT']) ?>) {
+            return;
+        }
+        
+        const payload = {
+            event,
+            timestamp: new Date().toISOString(),
+            ...data
+        };
+        
+        if (navigator.sendBeacon) {
+            navigator.sendBeacon('/api/analytics', JSON.stringify(payload));
+        }
+    }
+    
+    // Utility
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Event listeners
+    document.getElementById('drawerClose').addEventListener('click', closeDrawer);
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && state.activeTile) {
+            closeDrawer();
+        }
+    });
+    
+    // Initialize
+    loadTiles();
+</script>
     
     <?php if (!empty($settings['analytics_id'])): ?>
     <!-- Analytics placeholder -->

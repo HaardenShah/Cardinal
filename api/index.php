@@ -115,8 +115,8 @@ function handleGetPublicTiles(): void {
             'target_url' => $row['target_url'],
             'accent_hex' => $row['accent_hex'],
             'media' => $row['path_webp'] ? [
-                'path_original' => '/api/media/serve/' . $row['bg_media_id'],
-                'path_webp' => '/api/media/serve/' . $row['bg_media_id'] . '?format=webp',
+                'path_original' => '/api/index.php/media/serve/' . $row['bg_media_id'],
+                'path_webp' => '/api/index.php/media/serve/' . $row['bg_media_id'] . '?format=webp',
                 'width' => (int)$row['width'],
                 'height' => (int)$row['height'],
                 'sizes' => json_decode($row['sizes_json'] ?? '[]', true),
@@ -487,7 +487,7 @@ function handleGetMedia(): void {
         $media[] = [
             'id' => (int)$row['id'],
             'original_name' => $row['original_name'],
-            'url' => '/api/media/serve/' . $row['id'],
+            'url' => '/api/index.php/media/serve/' . $row['id'],
             'width' => (int)$row['width'],
             'height' => (int)$row['height'],
             'created_at' => $row['created_at'],
@@ -714,9 +714,10 @@ function formatTileResponse(array $row): array {
         'publish_at' => $row['publish_at'],
         'created_at' => $row['created_at'],
         'updated_at' => $row['updated_at'],
-        'media' => isset($row['path_webp']) ? [
-            'path_original' => '/api/media/serve/' . $row['bg_media_id'],
-            'path_webp' => '/api/media/serve/' . $row['bg_media_id'] . '?format=webp',
+        'media' => isset($row['path_webp']) && $row['bg_media_id'] ? [
+            'id' => (int)$row['bg_media_id'],
+            'path_original' => '/api/index.php/media/serve/' . $row['bg_media_id'],
+            'path_webp' => '/api/index.php/media/serve/' . $row['bg_media_id'] . '?format=webp',
             'width' => (int)$row['width'],
             'height' => (int)$row['height'],
         ] : null,
